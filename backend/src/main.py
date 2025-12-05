@@ -1,0 +1,49 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import settings
+from .routers import (
+    auth_router,
+    cafes_router,
+    deadlines_router,
+    menu_router,
+    orders_router,
+    summaries_router,
+    users_router,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+
+
+app = FastAPI(
+    title="Lunch Order Bot API",
+    description="Backend API for Telegram lunch ordering bot",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
+app.include_router(cafes_router, prefix="/api/v1")
+app.include_router(menu_router, prefix="/api/v1")
+app.include_router(deadlines_router, prefix="/api/v1")
+app.include_router(orders_router, prefix="/api/v1")
+app.include_router(summaries_router, prefix="/api/v1")
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
