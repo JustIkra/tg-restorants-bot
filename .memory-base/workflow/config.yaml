@@ -1,0 +1,143 @@
+# AI Agents Workflow Configuration
+
+# MCP серверы
+mcp_servers:
+  context7:
+    description: "Актуальная документация библиотек"
+    tools:
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+# Агенты и их роли
+agents:
+  architect:
+    prompt: prompts/roles/architect.md
+    description: "Проектирует архитектуру, разбивает задачи на подзадачи"
+    tools:
+      - Read
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+  coder:
+    prompt: prompts/roles/coder.md
+    description: "Пишет код по спецификации"
+    tools:
+      - Read
+      - Edit
+      - Write
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+  reviewer:
+    prompt: prompts/roles/reviewer.md
+    description: "Проверяет код на качество, безопасность, соответствие стандартам"
+    tools:
+      - Read
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+  tester:
+    prompt: prompts/roles/tester.md
+    description: "Пишет и запускает тесты"
+    tools:
+      - Read
+      - Edit
+      - Write
+      - Bash
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+  debugger:
+    prompt: prompts/roles/debugger.md
+    description: "Анализирует проблемы, находит root cause"
+    tools:
+      - Read
+      - Bash
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
+  docwriter:
+    prompt: prompts/roles/docwriter.md
+    description: "Пишет и обновляет документацию"
+    tools:
+      - Read
+      - Edit
+      - Write
+      - Glob
+
+# Типовые pipelines
+pipelines:
+  feature:
+    description: "Новая функциональность"
+    stages:
+      - architect
+      - coder
+      - reviewer
+      - tester
+      - docwriter
+
+  bugfix:
+    description: "Исправление бага"
+    stages:
+      - debugger
+      - coder
+      - tester
+
+  refactor:
+    description: "Рефакторинг"
+    stages:
+      - architect
+      - coder
+      - reviewer
+      - tester
+
+  docs:
+    description: "Только документация"
+    stages:
+      - docwriter
+
+  hotfix:
+    description: "Срочное исправление"
+    stages:
+      - coder
+      - tester
+
+# Настройки задач
+tasks:
+  id_prefix: "TSK"
+  directories:
+    active: tasks/active
+    completed: tasks/completed
+    failed: tasks/failed
+
+# Форматы файлов результатов
+output:
+  format: markdown
+  frontmatter: yaml
+  required_fields:
+    - agent
+    - task_id
+    - status
+    - created_at
+  optional_fields:
+    - next
+    - files_changed
+    - blockers
+
+# Статусы
+statuses:
+  - pending
+  - in_progress
+  - completed
+  - failed
+  - blocked
