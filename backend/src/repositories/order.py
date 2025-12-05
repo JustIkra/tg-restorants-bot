@@ -78,6 +78,7 @@ class OrderRepository:
             if value is not None:
                 setattr(order, key, value)
         await self.session.flush()
+        await self.session.refresh(order)
         return order
 
     async def delete(self, order: Order) -> None:

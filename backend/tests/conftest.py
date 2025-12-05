@@ -1,6 +1,12 @@
 """Pytest fixtures for testing."""
 
 import os
+
+# Set environment variables BEFORE importing anything from src
+os.environ["TELEGRAM_BOT_TOKEN"] = "test_bot_token_123456:ABCdefGHIjklMNOpqrsTUVwxyz"
+os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_at_least_32_chars_long_for_security"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+
 from collections.abc import AsyncGenerator
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -72,11 +78,6 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-
-    # Override settings for tests
-    os.environ["TELEGRAM_BOT_TOKEN"] = "test_bot_token_123456:ABCdefGHIjklMNOpqrsTUVwxyz"
-    os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_at_least_32_chars_long_for_security"
-    os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -219,10 +220,18 @@ async def test_order(
     test_menu_items: list[MenuItem],
 ) -> Order:
     """Create a test order."""
+    # Order for next Monday (weekday 0) to match test_deadline
+    from datetime import timedelta
+    today = date.today()
+    days_until_monday = (0 - today.weekday()) % 7
+    if days_until_monday == 0:
+        days_until_monday = 7  # If today is Monday, order for next Monday
+    order_date = today + timedelta(days=days_until_monday)
+
     order = Order(
         user_tgid=test_user.tgid,
         cafe_id=test_cafe.id,
-        order_date=date.today(),
+        order_date=order_date,
         status="pending",
         combo_id=test_combo.id,
         combo_items=[
@@ -244,14 +253,14 @@ async def test_order(
 
 
 @pytest.fixture
-def auth_headers(test_user: User) -> dict[str, str]:
+async def auth_headers(test_user: User) -> dict[str, str]:
     """Generate JWT auth headers for test user."""
     token = create_access_token({"tgid": test_user.tgid, "role": test_user.role})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
-def manager_auth_headers(test_manager: User) -> dict[str, str]:
+async def manager_auth_headers(test_manager: User) -> dict[str, str]:
     """Generate JWT auth headers for test manager."""
     token = create_access_token({"tgid": test_manager.tgid, "role": test_manager.role})
     return {"Authorization": f"Bearer {token}"}

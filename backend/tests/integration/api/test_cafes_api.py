@@ -4,9 +4,9 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_get_cafes_list(client, test_cafe):
+async def test_get_cafes_list(client, test_cafe, auth_headers):
     """Test getting list of cafes (public endpoint)."""
-    response = await client.get("/api/v1/cafes")
+    response = await client.get("/api/v1/cafes", headers=auth_headers)
 
     assert response.status_code == 200
     data = response.json()
@@ -17,9 +17,9 @@ async def test_get_cafes_list(client, test_cafe):
 
 
 @pytest.mark.asyncio
-async def test_get_cafe_by_id(client, test_cafe):
+async def test_get_cafe_by_id(client, test_cafe, auth_headers):
     """Test getting cafe by ID."""
-    response = await client.get(f"/api/v1/cafes/{test_cafe.id}")
+    response = await client.get(f"/api/v1/cafes/{test_cafe.id}", headers=auth_headers)
 
     assert response.status_code == 200
     data = response.json()

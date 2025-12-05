@@ -18,10 +18,10 @@ async def test_get_schedule(db_session, test_cafe, test_deadline):
 
     assert schedule.cafe_id == test_cafe.id
     assert len(schedule.schedule) == 1
-    assert schedule.schedule[0]["weekday"] == 0
-    assert schedule.schedule[0]["deadline_time"] == "10:00"
-    assert schedule.schedule[0]["is_enabled"] is True
-    assert schedule.schedule[0]["advance_days"] == 1
+    assert schedule.schedule[0].weekday == 0
+    assert schedule.schedule[0].deadline_time == "10:00"
+    assert schedule.schedule[0].is_enabled is True
+    assert schedule.schedule[0].advance_days == 1
 
 
 @pytest.mark.asyncio
@@ -49,10 +49,10 @@ async def test_update_schedule(db_session, test_cafe):
     schedule = await service.update_schedule(test_cafe.id, update_data)
 
     assert len(schedule.schedule) == 2
-    assert schedule.schedule[0]["weekday"] == 0
-    assert schedule.schedule[0]["deadline_time"] == "11:00"
-    assert schedule.schedule[1]["weekday"] == 2
-    assert schedule.schedule[1]["deadline_time"] == "12:00"
+    assert schedule.schedule[0].weekday == 0
+    assert schedule.schedule[0].deadline_time == "11:00"
+    assert schedule.schedule[1].weekday == 2
+    assert schedule.schedule[1].deadline_time == "12:00"
 
 
 @pytest.mark.asyncio

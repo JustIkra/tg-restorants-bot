@@ -56,7 +56,7 @@ async def authenticate_telegram(
         user = User(
             tgid=tgid,
             name=name or f"User {tgid}",
-            office="",  # Will be set later
+            office=request.office,
             role="user",
             is_active=True,
         )
@@ -66,6 +66,9 @@ async def authenticate_telegram(
         # Update name if changed
         if name and user.name != name:
             user.name = name
+        # Update office if changed
+        if request.office and user.office != request.office:
+            user.office = request.office
 
     # Check if user is active
     if not user.is_active:

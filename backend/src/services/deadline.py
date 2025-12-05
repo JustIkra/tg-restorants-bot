@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..repositories.deadline import DeadlineRepository
 from ..schemas.deadline import (
     AvailabilityResponse,
+    DeadlineItem,
     DeadlineSchedule,
     DeadlineScheduleUpdate,
     WeekAvailabilityResponse,
@@ -21,12 +22,12 @@ class DeadlineService:
         return DeadlineSchedule(
             cafe_id=cafe_id,
             schedule=[
-                {
-                    "weekday": d.weekday,
-                    "deadline_time": d.deadline_time,
-                    "is_enabled": d.is_enabled,
-                    "advance_days": d.advance_days,
-                }
+                DeadlineItem(
+                    weekday=d.weekday,
+                    deadline_time=d.deadline_time,
+                    is_enabled=d.is_enabled,
+                    advance_days=d.advance_days,
+                )
                 for d in deadlines
             ],
         )
@@ -79,7 +80,7 @@ class DeadlineService:
         # Calculate deadline datetime
         # If advance_days > 0, deadline is advance_days before order_date
         deadline_date = order_date - timedelta(days=deadline.advance_days)
-        deadline_dt = datetime.combine(deadline_date, deadline_time)
+        deadline_dt = datetime.combine(deadline_date, deadline_time, tzinfo=timezone.utc)
 
         now = datetime.now(timezone.utc)
 

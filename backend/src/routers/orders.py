@@ -17,6 +17,16 @@ def get_order_service(db: Annotated[AsyncSession, Depends(get_db)]) -> OrderServ
     return OrderService(db)
 
 
+@router.get("/availability/week", response_model=WeekAvailabilityResponse)
+async def get_week_availability(
+    cafe_id: int,
+    current_user: CurrentUser,
+    service: Annotated[OrderService, Depends(get_order_service)],
+):
+    """Get availability for the next 7 days."""
+    return await service.get_week_availability(cafe_id)
+
+
 @router.get("/availability/{order_date}", response_model=AvailabilityResponse)
 async def check_availability(
     order_date: date,
@@ -26,16 +36,6 @@ async def check_availability(
 ):
     """Check if ordering is available for a specific date."""
     return await service.check_availability(cafe_id, order_date)
-
-
-@router.get("/availability/week", response_model=WeekAvailabilityResponse)
-async def get_week_availability(
-    cafe_id: int,
-    current_user: CurrentUser,
-    service: Annotated[OrderService, Depends(get_order_service)],
-):
-    """Get availability for the next 7 days."""
-    return await service.get_week_availability(cafe_id)
 
 
 @router.get("", response_model=list[OrderResponse])

@@ -95,7 +95,7 @@ async def test_create_order_success(
 
 
 @pytest.mark.asyncio
-async def test_update_order_success(db_session, test_user, test_order):
+async def test_update_order_success(db_session, test_user, test_order, test_deadline):
     """Test updating an order."""
     service = OrderService(db_session)
 
@@ -133,7 +133,7 @@ async def test_update_order_not_owner_forbidden(
 
 
 @pytest.mark.asyncio
-async def test_delete_order_success(db_session, test_user, test_order):
+async def test_delete_order_success(db_session, test_user, test_order, test_deadline):
     """Test deleting an order."""
     service = OrderService(db_session)
 

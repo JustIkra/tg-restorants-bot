@@ -2,3 +2,12 @@
 .env
 .claude
 .venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+htmlcov/
+*.egg-info/

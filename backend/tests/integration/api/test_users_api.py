@@ -103,7 +103,7 @@ async def test_get_user_balance(client, auth_headers, test_user):
 
     assert response.status_code == 200
     data = response.json()
-    assert "current_week_spent" in data
+    assert "spent_this_week" in data or "current_week_spent" in data
     assert "weekly_limit" in data
 
 

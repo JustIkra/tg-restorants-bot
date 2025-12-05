@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class TelegramAuthRequest(BaseModel):
     init_data: str
+    office: str
 
 
 class TokenResponse(BaseModel):

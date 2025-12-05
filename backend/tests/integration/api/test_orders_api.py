@@ -65,7 +65,7 @@ async def test_create_order(
 
 
 @pytest.mark.asyncio
-async def test_update_order(client, auth_headers, test_order):
+async def test_update_order(client, auth_headers, test_order, test_deadline):
     """Test updating an order."""
     update_data = {"notes": "Updated via API"}
 
@@ -79,7 +79,7 @@ async def test_update_order(client, auth_headers, test_order):
 
 
 @pytest.mark.asyncio
-async def test_delete_order(client, auth_headers, test_order):
+async def test_delete_order(client, auth_headers, test_order, test_deadline):
     """Test deleting an order."""
     response = await client.delete(
         f"/api/v1/orders/{test_order.id}", headers=auth_headers
@@ -101,12 +101,13 @@ async def test_get_order_unauthorized(client, test_order):
 
 
 @pytest.mark.asyncio
-async def test_check_availability(client, test_cafe, test_deadline):
+async def test_check_availability(client, auth_headers, test_cafe, test_deadline):
     """Test checking order availability."""
     order_date = date.today() + timedelta(days=2)
 
     response = await client.get(
-        f"/api/v1/orders/availability/{order_date}?cafe_id={test_cafe.id}"
+        f"/api/v1/orders/availability/{order_date}?cafe_id={test_cafe.id}",
+        headers=auth_headers
     )
 
     assert response.status_code == 200
@@ -116,10 +117,11 @@ async def test_check_availability(client, test_cafe, test_deadline):
 
 
 @pytest.mark.asyncio
-async def test_get_week_availability(client, test_cafe, test_deadline):
+async def test_get_week_availability(client, auth_headers, test_cafe, test_deadline):
     """Test getting week availability."""
     response = await client.get(
-        f"/api/v1/orders/availability/week?cafe_id={test_cafe.id}"
+        f"/api/v1/orders/availability/week?cafe_id={test_cafe.id}",
+        headers=auth_headers
     )
 
     assert response.status_code == 200
