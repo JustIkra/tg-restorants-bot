@@ -120,6 +120,48 @@ Cafe {
 
 ## Menu
 
+Меню состоит из комбо-наборов и отдельных блюд по категориям.
+
+### Комбо-наборы
+
+```
+GET /cafes/{cafe_id}/combos
+  Auth: user | manager
+  Response: { items: Combo[] }
+
+POST /cafes/{cafe_id}/combos
+  Auth: manager
+  Body: {
+    name: string,
+    categories: string[],  # ["salad", "soup"] или ["salad", "soup", "main"]
+    price: decimal
+  }
+  Response: Combo
+
+PATCH /cafes/{cafe_id}/combos/{combo_id}
+  Auth: manager
+  Body: { name?, categories?, price?, is_available? }
+  Response: Combo
+
+DELETE /cafes/{cafe_id}/combos/{combo_id}
+  Auth: manager
+  Response: 204
+```
+
+**Combo schema:**
+```
+Combo {
+  id: int
+  cafe_id: int
+  name: string               # "Салат + Суп", "Салат + Суп + Основное блюдо"
+  categories: string[]       # ["salad", "soup", "main"]
+  price: decimal
+  is_available: bool
+}
+```
+
+### Блюда меню
+
 ```
 GET /cafes/{cafe_id}/menu
   Auth: user | manager
@@ -131,10 +173,8 @@ POST /cafes/{cafe_id}/menu
   Body: {
     name: string,
     description?: string,
-    category?: string,
-    portion_type: "single" | "sized",
-    portion_sizes?: [{ size: string, price: decimal }],  # если sized
-    price?: decimal  # если single
+    category: string,   # "soup" | "salad" | "main" | "extra"
+    price?: decimal     # только для категории "extra"
   }
   Response: MenuItem
 
@@ -144,7 +184,7 @@ GET /cafes/{cafe_id}/menu/{item_id}
 
 PATCH /cafes/{cafe_id}/menu/{item_id}
   Auth: manager
-  Body: { name?, description?, category?, portion_sizes?, is_available? }
+  Body: { name?, description?, category?, price?, is_available? }
   Response: MenuItem
 
 DELETE /cafes/{cafe_id}/menu/{item_id}
@@ -159,42 +199,46 @@ MenuItem {
   cafe_id: int
   name: string
   description: string | null
-  category: string | null
-  portion_type: "single" | "sized"
-  portion_sizes: PortionSize[] | null  # если sized
-  price: decimal | null                 # если single
+  category: string           # "soup" | "salad" | "main" | "extra"
+  price: decimal | null      # цена только для "extra", остальные входят в комбо
   is_available: bool
-}
-
-PortionSize {
-  size: string      # "small" | "standard" | "large" или custom
-  label: string     # "Маленькая" | "Стандартная" | "Большая"
-  price: decimal
 }
 ```
 
+**Категории:**
+- `soup` — Супы (входят в комбо)
+- `salad` — Салаты (входят в комбо)
+- `main` — Основные блюда (входят в комбо)
+- `extra` — Дополнительно (продаётся отдельно, имеет цену)
+
 **Примеры:**
 ```json
-// Единичный товар (напиток, десерт)
+// Комбо-набор
 {
   "id": 1,
-  "name": "Американо",
-  "portion_type": "single",
-  "price": 150.00,
-  "portion_sizes": null
+  "name": "Салат + Суп",
+  "categories": ["salad", "soup"],
+  "price": 450.00,
+  "is_available": true
 }
 
-// Товар с размерами порций
+// Блюдо в комбо (без цены)
 {
-  "id": 2,
-  "name": "Борщ",
-  "portion_type": "sized",
+  "id": 10,
+  "name": "Борщ с курицей",
+  "category": "soup",
   "price": null,
-  "portion_sizes": [
-    { "size": "small", "label": "Маленькая", "price": 180.00 },
-    { "size": "standard", "label": "Стандартная", "price": 250.00 },
-    { "size": "large", "label": "Большая", "price": 320.00 }
-  ]
+  "is_available": true
+}
+
+// Дополнительный товар (с ценой)
+{
+  "id": 20,
+  "name": "Фокачча с пряным маслом",
+  "description": "60 г.",
+  "category": "extra",
+  "price": 50.00,
+  "is_available": true
 }
 ```
 
@@ -235,6 +279,8 @@ DeadlineScheduleInput {
 
 ## Orders
 
+Заказ состоит из комбо-набора (с выбранными блюдами) и опциональных дополнительных товаров.
+
 ```
 GET /orders/availability/{date}
   Auth: user | manager
@@ -269,16 +315,19 @@ POST /orders
   Body: {
     cafe_id: int,
     order_date: date,
-    items: [{
-      menu_item_id: int,
-      portion_size?: string,  # "small"|"standard"|"large" для sized
-      quantity: int,
-      notes?: string          # пожелания к блюду
+    combo_id: int,
+    combo_items: [{
+      category: string,       # "soup" | "salad" | "main"
+      menu_item_id: int
     }],
-    notes?: string            # общие пожелания к заказу
+    extras?: [{
+      menu_item_id: int,
+      quantity: int
+    }],
+    notes?: string
   }
   Response: Order
-  Errors: 400 (deadline passed), 403 (access denied)
+  Errors: 400 (deadline passed, invalid combo), 403 (access denied)
 
 GET /orders/{order_id}
   Auth: user (owner) | manager
@@ -287,7 +336,8 @@ GET /orders/{order_id}
 PATCH /orders/{order_id}
   Auth: user (owner, before deadline)
   Body: {
-    items?: [{ menu_item_id, portion_size?, quantity, notes? }],
+    combo_items?: [{ category, menu_item_id }],
+    extras?: [{ menu_item_id, quantity }],
     notes?: string
   }
   Response: Order
@@ -296,12 +346,6 @@ PATCH /orders/{order_id}
 DELETE /orders/{order_id}
   Auth: user (owner, before deadline) | manager
   Response: 204
-  Errors: 400 (deadline passed)
-
-POST /orders/{order_id}/items
-  Auth: user (owner, before deadline)
-  Body: { menu_item_id: int, portion_size?: string, quantity: int, notes?: string }
-  Response: Order
   Errors: 400 (deadline passed)
 ```
 
@@ -315,23 +359,31 @@ Order {
   cafe_name: string
   order_date: date
   status: "pending" | "confirmed" | "cancelled"
-  items: OrderItem[]
-  notes: string | null        # общие пожелания к заказу
+  combo: OrderCombo
+  extras: OrderExtra[]
+  notes: string | null
   total_price: decimal
   created_at: datetime
   updated_at: datetime
 }
 
-OrderItem {
-  id: int
+OrderCombo {
+  combo_id: int
+  combo_name: string          # "Салат + Суп + Основное блюдо"
+  combo_price: decimal
+  items: [{
+    category: string          # "soup" | "salad" | "main"
+    menu_item_id: int
+    menu_item_name: string
+  }]
+}
+
+OrderExtra {
   menu_item_id: int
   menu_item_name: string
-  portion_size: string | null   # null для single, "small"|"standard"|"large" для sized
-  portion_label: string | null  # "Маленькая" и т.д.
   quantity: int
   price: decimal
   subtotal: decimal
-  notes: string | null          # пожелания к конкретному блюду ("без лука", "острее")
 }
 ```
 
@@ -344,26 +396,26 @@ OrderItem {
   "order_date": "2025-12-08",
   "status": "pending",
   "notes": "Доставить к 12:30",
-  "items": [
+  "combo": {
+    "combo_id": 2,
+    "combo_name": "Салат + Суп + Основное блюдо",
+    "combo_price": 550.00,
+    "items": [
+      { "category": "salad", "menu_item_id": 10, "menu_item_name": "Салат с курицей" },
+      { "category": "soup", "menu_item_id": 11, "menu_item_name": "Борщ с курицей" },
+      { "category": "main", "menu_item_id": 12, "menu_item_name": "Котлета с пюре" }
+    ]
+  },
+  "extras": [
     {
-      "menu_item_name": "Борщ",
-      "portion_size": "large",
-      "portion_label": "Большая",
+      "menu_item_id": 20,
+      "menu_item_name": "Фокачча с пряным маслом",
       "quantity": 1,
-      "price": 320.00,
-      "subtotal": 320.00,
-      "notes": "без сметаны"
-    },
-    {
-      "menu_item_name": "Американо",
-      "portion_size": null,
-      "quantity": 2,
-      "price": 150.00,
-      "subtotal": 300.00,
-      "notes": null
+      "price": 50.00,
+      "subtotal": 50.00
     }
   ],
-  "total_price": 620.00
+  "total_price": 600.00
 }
 ```
 
@@ -400,17 +452,24 @@ Summary {
   cafe_name: string
   date: date
   total_orders: int
-  total_items: int
   total_amount: decimal
-  items_breakdown: [{
-    menu_item_name: string,
-    portion_size: string | null,
+  combos_breakdown: [{
+    combo_name: string,
     quantity: int,
     total: decimal
   }]
-  orders_with_notes: [{       # заказы с пожеланиями
+  items_breakdown: [{
+    category: string,
+    menu_item_name: string,
+    quantity: int
+  }]
+  extras_breakdown: [{
+    menu_item_name: string,
+    quantity: int,
+    total: decimal
+  }]
+  orders_with_notes: [{
     user_name: string,
-    item_name: string,
     notes: string
   }]
   created_at: datetime

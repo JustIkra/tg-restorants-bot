@@ -26,8 +26,8 @@
 - [AI Agents Workflow Design](plans/2025-12-05-ai-agents-workflow-design.md) - Supervisor + agents architecture
 
 ## Workflow
-- [Config](workflow/config.yaml) - agents, pipelines, settings
-- [Base Prompt](workflow/prompts/base.md) - common agent instructions
+- [Config](workflow/config.yaml) - agents, pipelines, settings, **parallel execution**
+- [Base Prompt](workflow/prompts/base.md) - common agent instructions, parallel mode
 - Agent Roles:
   - [Task Creator](workflow/prompts/roles/task-creator.md) - creates tasks with codebase analysis
   - [Architect](workflow/prompts/roles/architect.md)
