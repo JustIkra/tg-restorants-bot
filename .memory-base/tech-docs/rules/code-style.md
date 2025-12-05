@@ -107,32 +107,149 @@ async def handle_deadline(event: DeadlineEvent) -> None:
 
 ---
 
-## TypeScript/React
+## TypeScript/React (Next.js 16 + Tailwind CSS 4)
 
-Стек: Vite + React + TypeScript
+**Location:** `frontend_mini_app/`
 
 ### Форматирование
-- **Formatter:** Prettier
-- **Linter:** ESLint
+- **Linter:** ESLint 9 + eslint-config-next
+- **Framework:** Next.js 16 (App Router)
+- **Styling:** Tailwind CSS 4 (utility classes)
+
+### Структура проекта
+
+```
+frontend_mini_app/
+├── src/
+│   ├── app/              # Next.js App Router
+│   │   ├── layout.tsx    # Root layout
+│   │   ├── page.tsx      # Home page
+│   │   └── globals.css   # Global styles + Tailwind
+│   └── components/       # React components
+│       ├── CafeSelector/
+│       ├── CategorySelector/
+│       ├── Menu/
+│       └── Cart/
+├── public/               # Static assets
+└── package.json
+```
 
 ### Компоненты
 
 ```tsx
-interface UserCardProps {
-  user: User;
-  onSelect: (id: number) => void;
+import React from "react";
+
+// TypeScript интерфейсы для props
+interface DishCardProps {
+  dish: Dish;
+  quantity: number;
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
 }
 
-export function UserCard({ user, onSelect }: UserCardProps) {
-  return ...
+// Functional component с React.FC
+const DishCard: React.FC<DishCardProps> = ({ dish, quantity, onAdd, onRemove }) => (
+  <div className="bg-[#7B6F9C]/20 rounded-[12px] p-4">
+    <h4 className="text-white font-medium">{dish.name}</h4>
+    <p className="text-gray-300 text-sm">{dish.description}</p>
+    <span className="text-white font-bold">{dish.price} ₽</span>
+  </div>
+);
+
+export default DishCard;
+```
+
+### Client Components
+
+```tsx
+"use client";  // Обязательно для useState, useEffect, event handlers
+
+import { useState } from "react";
+
+export default function InteractiveComponent() {
+  const [state, setState] = useState<number>(0);
+  return <button onClick={() => setState(s => s + 1)}>{state}</button>;
 }
 ```
 
 ### Импорты
 
 ```tsx
-import { useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
-import { useUser } from '@/hooks/useUser';
-import styles from './UserCard.module.css';
+// React и hooks
+import { useState, useEffect } from "react";
+
+// Next.js
+import type { Metadata } from "next";
+import { Geist } from "next/font/google";
+
+// Иконки
+import { FaCartShopping, FaBowlFood } from "react-icons/fa6";
+
+// Компоненты (@ = src/)
+import CafeSelector from "@/components/CafeSelector/CafeSelector";
+```
+
+### Tailwind CSS
+
+```tsx
+// Цветовая схема проекта
+const colors = {
+  background: "#130F30",        // темный фон
+  accent: "#A020F0",            // фиолетовый акцент
+  accentDark: "#8B23CB",        // темный акцент
+  card: "#7B6F9C",              // карточки (с opacity)
+  text: "white",
+  textMuted: "gray-300",
+};
+
+// Пример компонента
+<div className="bg-[#130F30] min-h-screen">
+  <div className="bg-[#7B6F9C]/20 backdrop-blur-sm rounded-xl p-4">
+    <h1 className="text-white font-bold text-2xl">Title</h1>
+    <p className="text-gray-300 text-sm">Description</p>
+  </div>
+</div>
+
+// Градиенты
+<button className="bg-gradient-to-r from-[#8B23CB] to-[#A020F0] text-white">
+  Action
+</button>
+```
+
+### Типы
+
+```tsx
+// Определение типов рядом с компонентом или в отдельном файле
+type Cafe = { id: number; name: string };
+type Category = { id: number; name: string; icon: React.ReactNode };
+type Dish = {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  categoryId: number;
+};
+
+// Cart как Record
+type Cart = { [dishId: number]: number };
+```
+
+### State Management
+
+```tsx
+// Локальный state для UI
+const [activeCafeId, setActiveCafeId] = useState<number>(1);
+const [cart, setCart] = useState<Cart>({});
+
+// Handlers
+const addToCart = (dishId: number) =>
+  setCart(prev => ({ ...prev, [dishId]: (prev[dishId] || 0) + 1 }));
+
+const removeFromCart = (dishId: number) =>
+  setCart(prev => {
+    const copy = { ...prev };
+    if (copy[dishId] > 1) copy[dishId]--;
+    else delete copy[dishId];
+    return copy;
+  });
 ```

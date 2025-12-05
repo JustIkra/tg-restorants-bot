@@ -10,6 +10,17 @@ mcp_servers:
 
 # Агенты и их роли
 agents:
+  task-creator:
+    prompt: prompts/roles/task-creator.md
+    description: "Анализирует запрос, исследует кодовую базу, создаёт task.md"
+    tools:
+      - Read
+      - Write
+      - Glob
+      - Grep
+      - mcp__context7__resolve-library-id
+      - mcp__context7__get-library-docs
+
   architect:
     prompt: prompts/roles/architect.md
     description: "Проектирует архитектуру, разбивает задачи на подзадачи"
