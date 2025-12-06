@@ -15,3 +15,5 @@ htmlcov/
 *.egg-info/
 .mcp.json
 CLAUDE.md
+# Production secrets
+.env.production

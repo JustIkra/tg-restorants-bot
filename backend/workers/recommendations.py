@@ -15,10 +15,10 @@ from faststream.kafka import KafkaBroker
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.src.cache.redis_client import set_cache
-from backend.src.config import settings
-from backend.src.gemini import AllKeysExhaustedException, get_key_pool
-from backend.src.services.order_stats import OrderStatsService
+from src.cache.redis_client import set_cache
+from src.config import settings
+from src.gemini import AllKeysExhaustedException, get_key_pool
+from src.services.order_stats import OrderStatsService
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ async def generate_recommendations_batch():
                     # Note: This assumes GeminiRecommendationService exists (subtask 3.2)
                     # For now, create a mock structure until client.py is implemented
                     try:
-                        from backend.src.gemini.client import (
+                        from src.gemini.client import (
                             get_recommendation_service,
                         )
 
@@ -164,33 +164,6 @@ async def generate_recommendations_batch():
             raise
 
 
-@broker.on_startup
-async def setup_scheduler():
-    """
-    Setup APScheduler for daily recommendations generation.
-
-    Scheduled to run at 03:00 AM every day.
-    """
-    scheduler.add_job(
-        generate_recommendations_batch,
-        trigger="cron",
-        hour=3,
-        minute=0,
-        id="daily_recommendations",
-        replace_existing=True,
-    )
-
-    scheduler.start()
-
-    logger.info(
-        "Recommendations scheduler started",
-        extra={
-            "schedule": "03:00 daily",
-            "kafka_broker": settings.KAFKA_BROKER_URL,
-        },
-    )
-
-
 @broker.subscriber("lunch-bot.daily-tasks")
 async def handle_daily_task(event: dict):
     """
@@ -210,20 +183,9 @@ async def handle_daily_task(event: dict):
         await generate_recommendations_batch()
 
 
-@broker.on_shutdown
-async def shutdown_event():
-    """Cleanup on worker shutdown."""
-    logger.info("Recommendations worker shutting down")
-
-    # Shutdown scheduler
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-
-    # Dispose database engine
-    await engine.dispose()
-
-
 if __name__ == "__main__":
+    import signal
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -237,4 +199,52 @@ if __name__ == "__main__":
         },
     )
 
-    asyncio.run(broker.start())
+    async def main():
+        """Main function to run the broker with scheduler."""
+        # Start scheduler in async context
+        scheduler.add_job(
+            generate_recommendations_batch,
+            trigger="cron",
+            hour=3,
+            minute=0,
+            id="daily_recommendations",
+            replace_existing=True,
+        )
+        scheduler.start()
+
+        logger.info(
+            "Recommendations scheduler started",
+            extra={
+                "schedule": "03:00 daily",
+                "kafka_broker": settings.KAFKA_BROKER_URL,
+            },
+        )
+
+        logger.info("Broker connecting to Kafka")
+
+        async with broker:
+            logger.info("Recommendations worker ready - waiting for messages")
+
+            # Create stop event
+            stop_event = asyncio.Event()
+
+            # Handle graceful shutdown
+            def shutdown_handler(signum, frame):
+                logger.info("Received shutdown signal")
+                stop_event.set()
+
+            signal.signal(signal.SIGINT, shutdown_handler)
+            signal.signal(signal.SIGTERM, shutdown_handler)
+
+            # Wait for shutdown signal
+            try:
+                await stop_event.wait()
+            except KeyboardInterrupt:
+                logger.info("KeyboardInterrupt received")
+
+        logger.info("Recommendations worker shutting down")
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+        await engine.dispose()
+
+    asyncio.run(main())

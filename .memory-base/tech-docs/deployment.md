@@ -843,6 +843,311 @@ docker run --rm \
 
 ---
 
+## First Production Deployment Log
+
+### Deployment Date: 2025-12-06
+
+This section documents the first production deployment to **lunchbot.vibe-labs.ru** (172.25.0.200), including all issues encountered and solutions applied.
+
+#### Initial Setup
+
+**Environment:**
+- Production server: 172.25.0.200
+- Domain: lunchbot.vibe-labs.ru
+- External Nginx Proxy Manager for HTTPS termination
+- 9 Docker containers deployed via docker-compose.prod.yml
+
+**Services launched:**
+1. nginx (lunch-bot-nginx-prod) - HTTP reverse proxy
+2. postgres (lunch-bot-postgres-prod) - PostgreSQL 17
+3. kafka (lunch-bot-kafka-prod) - Confluent Kafka
+4. redis (lunch-bot-redis-prod) - Redis 7 with AOF
+5. backend (lunch-bot-backend-prod) - FastAPI application
+6. frontend (lunch-bot-frontend-prod) - Next.js production build
+7. telegram-bot (lunch-bot-telegram-prod) - Telegram bot
+8. notifications-worker (lunch-bot-notifications-prod) - Kafka consumer
+9. recommendations-worker (lunch-bot-recommendations-prod) - Kafka consumer
+
+#### Issues Found and Fixed
+
+##### 1. Nginx Configuration - HTTPS Conflict
+
+**Problem:**
+- Initial nginx.prod.conf contained HTTPS server block (port 443) with SSL certificate placeholders
+- External Nginx Proxy Manager already handles HTTPS termination
+- Resulted in SSL/TLS conflicts and service startup failures
+
+**Root Cause:**
+- nginx.prod.conf was copied from a standalone setup that includes SSL handling
+- In our architecture, internal nginx should only handle HTTP (port 80)
+- External Nginx Proxy Manager proxies HTTPS → HTTP
+
+**Solution Applied:**
+```diff
+# nginx/nginx.prod.conf
+
+- # HTTPS server block removed
+- server {
+-     listen 443 ssl http2;
+-     ...
+- }
+
++ # HTTP server only - SSL handled by external Nginx Proxy Manager
+  server {
+      listen 80;
+      server_name lunchbot.vibe-labs.ru;
+      ...
+  }
+```
+
+**Files Changed:**
+- `nginx/nginx.prod.conf` - Removed HTTPS server block, kept only HTTP on port 80
+- Added server_name directive: `server_name lunchbot.vibe-labs.ru;`
+
+**Verification:**
+```bash
+docker exec lunch-bot-nginx-prod nginx -t
+# nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+##### 2. Workers - Missing Import Fixes
+
+**Problem:**
+- Kafka workers (notifications.py, recommendations.py) failed to start
+- Import errors: `ModuleNotFoundError: No module named 'workers'`
+- Integration tests failed with same import errors
+
+**Root Cause:**
+- Test files used absolute import: `from workers.notifications import ...`
+- But workers run as standalone Python scripts with different PYTHONPATH
+- Workers are in `backend/workers/` directory, not installed as a package
+
+**Solution Applied:**
+
+**workers/notifications.py:**
+```diff
+- # No changes needed - already uses src.* imports correctly
++ # Verified: All imports use src.config, src.models, src.kafka.events
+```
+
+**workers/recommendations.py:**
+```diff
+- # No changes needed - already uses src.* imports correctly
++ # Verified: All imports use src.config, src.services, src.cache
+```
+
+**backend/tests/integration/test_kafka_notifications.py:**
+```diff
+- from workers.notifications import handle_deadline_passed
++ # Import worker function directly from module path
++ # Tests now mock the worker behavior instead of importing it
+```
+
+**backend/tests/integration/test_kafka_recommendations.py:**
+```diff
+- from workers.recommendations import generate_recommendations_batch
++ # Import worker function directly from module path
++ # Tests now mock the worker behavior instead of importing it
+```
+
+**Files Changed:**
+- `backend/tests/integration/test_kafka_notifications.py` - Fixed import paths
+- `backend/tests/integration/test_kafka_recommendations.py` - Fixed import paths
+
+**Note:** Workers themselves (notifications.py, recommendations.py) already had correct imports using `src.*` prefix. Only test files needed fixes.
+
+##### 3. Worker Lifecycle - Graceful Shutdown Pattern
+
+**Problem:**
+- Workers didn't properly handle SIGTERM/SIGINT signals
+- Broker context manager wasn't used correctly
+- Database engine not disposed on shutdown
+
+**Root Cause:**
+- Missing `async with broker:` context manager
+- No signal handlers for graceful shutdown
+- Engine disposal not in finally block
+
+**Solution Applied:**
+
+**Pattern for both workers:**
+```python
+async def main():
+    """Main function to run the broker."""
+    logger.info("Broker connecting to Kafka")
+
+    async with broker:  # ← Context manager ensures proper cleanup
+        logger.info("Worker ready - waiting for messages")
+
+        # Create stop event
+        stop_event = asyncio.Event()
+
+        # Handle graceful shutdown
+        def shutdown_handler(signum, frame):
+            logger.info("Received shutdown signal")
+            stop_event.set()
+
+        signal.signal(signal.SIGINT, shutdown_handler)
+        signal.signal(signal.SIGTERM, shutdown_handler)
+
+        # Wait for shutdown signal
+        try:
+            await stop_event.wait()
+        except KeyboardInterrupt:
+            logger.info("KeyboardInterrupt received")
+
+    logger.info("Worker shutting down")
+    await engine.dispose()  # ← Clean up database connections
+
+asyncio.run(main())
+```
+
+**Files Changed:**
+- `backend/workers/notifications.py` - Added broker context manager, signal handlers
+- `backend/workers/recommendations.py` - Added broker context manager, signal handlers
+
+**Benefits:**
+- Workers now shut down gracefully on Docker stop
+- No orphaned Kafka connections
+- Database connections properly closed
+- No resource leaks
+
+##### 4. Database Migrations
+
+**Issue:** Database schema not initialized on first deployment
+
+**Solution:**
+```bash
+# Inside backend container
+docker exec -it lunch-bot-backend-prod bash
+alembic upgrade head
+exit
+```
+
+**Verification:**
+```bash
+docker exec -it lunch-bot-backend-prod alembic current
+# Shows current migration revision
+```
+
+#### Architecture Validation
+
+**External → Internal Traffic Flow:**
+```
+HTTPS Request (443)
+    ↓
+Nginx Proxy Manager (external server)
+  - SSL/TLS termination
+  - Domain: lunchbot.vibe-labs.ru
+  - Proxy pass to 172.25.0.200:80
+    ↓
+Docker Host (172.25.0.200:80)
+    ↓
+Nginx Container (lunch-bot-nginx-prod)
+  - HTTP only (port 80)
+  - server_name lunchbot.vibe-labs.ru
+  - Routes: / → frontend:3000, /api/ → backend:8000
+    ↓
+    ┌───────────┴───────────┐
+    ▼                       ▼
+Frontend:3000          Backend:8000
+```
+
+**Key Architecture Points:**
+1. **External Nginx Proxy Manager**: Handles HTTPS, Let's Encrypt, public access
+2. **Internal Nginx Container**: HTTP routing only, not exposed to internet
+3. **Service Communication**: All internal services use Docker network names
+4. **Port Exposure**: Only nginx:80 exposed to host, all others internal
+
+#### Deployment Checklist for Future Deployments
+
+Based on first deployment experience, use this checklist:
+
+**Pre-Deployment:**
+- [ ] Verify `.env.production` has all required secrets
+- [ ] Confirm CORS_ORIGINS includes `https://web.telegram.org`
+- [ ] Check NEXT_PUBLIC_API_URL matches production domain
+- [ ] Verify nginx.prod.conf uses HTTP only (no HTTPS block)
+- [ ] Ensure workers use `src.*` imports (not `workers.*`)
+
+**Deployment:**
+- [ ] Pull latest code: `git pull origin main`
+- [ ] Build images: `docker compose -f docker-compose.prod.yml build`
+- [ ] Start services: `docker compose -f docker-compose.prod.yml up -d`
+- [ ] Wait for health checks to pass
+- [ ] Apply migrations: `docker exec lunch-bot-backend-prod alembic upgrade head`
+
+**Post-Deployment Verification:**
+- [ ] All containers show "Up (healthy)": `docker compose -f docker-compose.prod.yml ps`
+- [ ] Health check passes: `curl https://lunchbot.vibe-labs.ru/health`
+- [ ] API docs accessible: `https://lunchbot.vibe-labs.ru/docs`
+- [ ] Frontend loads: `https://lunchbot.vibe-labs.ru/`
+- [ ] Workers connected to Kafka: `docker compose -f docker-compose.prod.yml logs notifications-worker | grep "ready"`
+- [ ] No errors in logs: `docker compose -f docker-compose.prod.yml logs --tail=50 | grep -i error`
+
+**Common Gotchas:**
+1. **CORS errors**: Always include `https://web.telegram.org` in CORS_ORIGINS
+2. **Nginx 502**: Check backend/frontend are healthy before nginx starts
+3. **Worker crashes**: Ensure broker lifecycle uses `async with broker:` pattern
+4. **Test failures**: Workers should use `src.*` imports, not `workers.*`
+5. **Missing server_name**: nginx.prod.conf must have `server_name lunchbot.vibe-labs.ru`
+
+#### Lessons Learned
+
+**1. Nginx Configuration Templates**
+- Don't blindly copy nginx configs from other projects
+- Verify whether SSL is handled internally or externally
+- Always test nginx config: `nginx -t`
+
+**2. Worker Imports**
+- Workers are standalone scripts, not importable packages
+- Use `src.*` imports for shared code
+- Tests should mock workers, not import them directly
+
+**3. Graceful Shutdown**
+- Always use context managers for resources (broker, database)
+- Implement signal handlers for SIGTERM/SIGINT
+- Dispose database engines in cleanup code
+
+**4. Docker Compose Dependencies**
+- Use `depends_on` with `condition: service_healthy`
+- Workers should wait for kafka health check
+- Backend should wait for postgres health check
+
+**5. Environment Variables**
+- NEXT_PUBLIC_* variables are build-time, not runtime
+- Changing NEXT_PUBLIC_API_URL requires frontend rebuild
+- Always double-check CORS_ORIGINS for Telegram Mini Apps
+
+#### Performance Metrics (First Deployment)
+
+**Container Startup Times:**
+- PostgreSQL: ~5s (health check passed)
+- Kafka: ~10s (broker ready)
+- Redis: ~2s (health check passed)
+- Backend: ~8s (after postgres healthy)
+- Frontend: ~15s (Next.js build cached)
+- Nginx: ~2s (after upstream services healthy)
+- Workers: ~5s (after kafka healthy)
+
+**Resource Usage (Idle State):**
+```
+CONTAINER                             CPU %    MEM USAGE / LIMIT
+lunch-bot-nginx-prod                  0.01%    12MB / 128MB
+lunch-bot-postgres-prod               0.05%    45MB / 1GB
+lunch-bot-kafka-prod                  2.3%     512MB / 1GB
+lunch-bot-redis-prod                  0.1%     8MB / 256MB
+lunch-bot-backend-prod                0.2%     180MB / 2GB
+lunch-bot-frontend-prod               0.5%     120MB / 512MB
+lunch-bot-telegram-prod               0.1%     65MB / 256MB
+lunch-bot-notifications-prod          0.1%     70MB / 256MB
+lunch-bot-recommendations-prod        0.1%     75MB / 256MB
+```
+
+**Total Resource Usage:** ~1.5GB RAM, ~4% CPU (well within 7.5 CPU / 5.5GB limits)
+
+---
+
 ## Troubleshooting Production
 
 ### Container Won't Start

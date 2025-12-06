@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.src.gemini import AllKeysExhaustedException
-from backend.src.models.order import Order
+from src.gemini import AllKeysExhaustedException
+from src.models.order import Order
 
 
 class TestKafkaRecommendationsWorker:
@@ -17,7 +17,7 @@ class TestKafkaRecommendationsWorker:
     @pytest.fixture
     def mock_redis_client(self):
         """Mock Redis client for caching."""
-        with patch("backend.workers.recommendations.set_cache") as mock_set_cache:
+        with patch("workers.recommendations.set_cache") as mock_set_cache:
             mock_set_cache.return_value = AsyncMock()
             yield mock_set_cache
 
@@ -25,7 +25,7 @@ class TestKafkaRecommendationsWorker:
     def mock_recommendation_service(self):
         """Mock GeminiRecommendationService."""
         with patch(
-            "backend.workers.recommendations.get_recommendation_service"
+            "workers.recommendations.get_recommendation_service"
         ) as mock_service:
             service_instance = AsyncMock()
             service_instance.generate_recommendations = AsyncMock(
@@ -43,7 +43,7 @@ class TestKafkaRecommendationsWorker:
     @pytest.fixture
     def mock_key_pool(self):
         """Mock Gemini API key pool."""
-        with patch("backend.workers.recommendations.get_key_pool") as mock_pool:
+        with patch("workers.recommendations.get_key_pool") as mock_pool:
             pool_instance = MagicMock()
             mock_pool.return_value = pool_instance
             yield pool_instance
@@ -82,7 +82,7 @@ class TestKafkaRecommendationsWorker:
         await db_session.commit()
 
         # Act: Run batch generation
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 
@@ -136,7 +136,7 @@ class TestKafkaRecommendationsWorker:
         await db_session.commit()
 
         # Act
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 
@@ -176,7 +176,7 @@ class TestKafkaRecommendationsWorker:
 
         # Mock service to raise error
         with patch(
-            "backend.workers.recommendations.get_recommendation_service"
+            "workers.recommendations.get_recommendation_service"
         ) as mock_service:
             service_instance = AsyncMock()
             service_instance.generate_recommendations = AsyncMock(
@@ -185,7 +185,7 @@ class TestKafkaRecommendationsWorker:
             mock_service.return_value = service_instance
 
             # Act: Should not raise exception
-            from backend.workers.recommendations import (
+            from workers.recommendations import (
                 generate_recommendations_batch,
             )
 
@@ -244,7 +244,7 @@ class TestKafkaRecommendationsWorker:
 
         # Mock service: first user succeeds, second raises AllKeysExhaustedException
         with patch(
-            "backend.workers.recommendations.get_recommendation_service"
+            "workers.recommendations.get_recommendation_service"
         ) as mock_service:
             service_instance = AsyncMock()
 
@@ -261,7 +261,7 @@ class TestKafkaRecommendationsWorker:
             mock_service.return_value = service_instance
 
             # Act
-            from backend.workers.recommendations import (
+            from workers.recommendations import (
                 generate_recommendations_batch,
             )
 
@@ -283,7 +283,7 @@ class TestKafkaRecommendationsWorker:
         # Arrange: No orders in database
 
         # Act
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 
@@ -341,7 +341,7 @@ class TestKafkaRecommendationsWorker:
         await db_session.commit()
 
         # Act
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 
@@ -384,7 +384,7 @@ class TestKafkaRecommendationsWorker:
         await db_session.commit()
 
         # Act
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 
@@ -440,7 +440,7 @@ class TestKafkaRecommendationsWorker:
         event = {"type": "generate_recommendations", "timestamp": datetime.now(timezone.utc)}
 
         # Act: Call event handler
-        from backend.workers.recommendations import handle_daily_task
+        from workers.recommendations import handle_daily_task
 
         await handle_daily_task(event)
 
@@ -460,7 +460,7 @@ class TestKafkaRecommendationsWorker:
         event = {"type": "some_other_task", "timestamp": datetime.now(timezone.utc)}
 
         # Act
-        from backend.workers.recommendations import handle_daily_task
+        from workers.recommendations import handle_daily_task
 
         await handle_daily_task(event)
 
@@ -502,7 +502,7 @@ class TestKafkaRecommendationsWorker:
         await db_session.commit()
 
         # Act
-        from backend.workers.recommendations import generate_recommendations_batch
+        from workers.recommendations import generate_recommendations_batch
 
         await generate_recommendations_batch()
 

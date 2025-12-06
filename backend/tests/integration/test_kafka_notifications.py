@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy import select
 
-from backend.src.kafka.events import DeadlinePassedEvent
-from backend.src.models.cafe import Cafe
-from backend.src.models.order import Order
+from src.kafka.events import DeadlinePassedEvent
+from src.models.cafe import Cafe
+from src.models.order import Order
 
 
 class TestKafkaNotificationsWorker:
@@ -19,7 +19,7 @@ class TestKafkaNotificationsWorker:
     @pytest.fixture
     def mock_httpx_client(self):
         """Mock httpx.AsyncClient for Telegram API calls."""
-        with patch("backend.workers.notifications.httpx.AsyncClient") as mock_client:
+        with patch("workers.notifications.httpx.AsyncClient") as mock_client:
             # Create mock context manager
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
@@ -76,7 +76,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act: Import and call handler directly
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -123,7 +123,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -168,7 +168,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -213,7 +213,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -234,7 +234,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -293,7 +293,7 @@ class TestKafkaNotificationsWorker:
         )
 
         # Act
-        from backend.workers.notifications import handle_deadline_passed
+        from workers.notifications import handle_deadline_passed
 
         await handle_deadline_passed(event)
 
@@ -337,7 +337,7 @@ class TestKafkaNotificationsWorker:
         await db_session.commit()
 
         # Mock 429 response then success
-        with patch("backend.workers.notifications.httpx.AsyncClient") as mock_client:
+        with patch("workers.notifications.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -375,7 +375,7 @@ class TestKafkaNotificationsWorker:
             )
 
             # Act
-            from backend.workers.notifications import handle_deadline_passed
+            from workers.notifications import handle_deadline_passed
 
             await handle_deadline_passed(event)
 
@@ -413,7 +413,7 @@ class TestKafkaNotificationsWorker:
         await db_session.commit()
 
         # Mock 403 Forbidden response (e.g., bot blocked by user)
-        with patch("backend.workers.notifications.httpx.AsyncClient") as mock_client:
+        with patch("workers.notifications.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -439,7 +439,7 @@ class TestKafkaNotificationsWorker:
             )
 
             # Act
-            from backend.workers.notifications import handle_deadline_passed
+            from workers.notifications import handle_deadline_passed
 
             await handle_deadline_passed(event)
 

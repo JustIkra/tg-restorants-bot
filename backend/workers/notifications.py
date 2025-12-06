@@ -11,11 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload, sessionmaker
 
-from backend.src.config import settings
-from backend.src.kafka.events import DeadlinePassedEvent
-from backend.src.models.cafe import Cafe, Combo, MenuItem
-from backend.src.models.order import Order
-from backend.src.models.user import User
+from src.config import settings
+from src.kafka.events import DeadlinePassedEvent
+from src.models.cafe import Cafe, Combo, MenuItem
+from src.models.order import Order
+from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -343,28 +343,47 @@ async def handle_deadline_passed(event: DeadlinePassedEvent) -> None:
             raise
 
 
-@broker.on_startup
-async def startup_event():
-    """Log startup of notifications worker."""
+if __name__ == "__main__":
+    import signal
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
     logger.info(
-        "Notifications worker started",
+        "Notifications worker starting",
         extra={
             "kafka_broker": settings.KAFKA_BROKER_URL,
             "topic": "lunch-bot.deadlines",
         },
     )
 
+    async def main():
+        """Main function to run the broker."""
+        logger.info("Broker connecting to Kafka")
 
-@broker.on_shutdown
-async def shutdown_event():
-    """Log shutdown of notifications worker."""
-    logger.info("Notifications worker shutting down")
-    await engine.dispose()
+        async with broker:
+            logger.info("Notifications worker ready - waiting for messages")
 
+            # Create stop event
+            stop_event = asyncio.Event()
 
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    asyncio.run(broker.start())
+            # Handle graceful shutdown
+            def shutdown_handler(signum, frame):
+                logger.info("Received shutdown signal")
+                stop_event.set()
+
+            signal.signal(signal.SIGINT, shutdown_handler)
+            signal.signal(signal.SIGTERM, shutdown_handler)
+
+            # Wait for shutdown signal
+            try:
+                await stop_event.wait()
+            except KeyboardInterrupt:
+                logger.info("KeyboardInterrupt received")
+
+        logger.info("Notifications worker shutting down")
+        await engine.dispose()
+
+    asyncio.run(main())
