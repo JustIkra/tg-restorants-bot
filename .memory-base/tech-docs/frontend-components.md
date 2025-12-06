@@ -12,9 +12,10 @@ Telegram Mini App for lunch ordering. Stack: Next.js 16, React 19, Tailwind CSS 
 2. [API Client Layer](#api-client-layer)
 3. [Telegram WebApp Integration](#telegram-webapp-integration)
 4. [UI Components](#ui-components)
-5. [Main Page Flow](#main-page-flow)
-6. [State Management](#state-management)
-7. [Testing](#testing)
+5. [Profile Components](#profile-components)
+6. [Main Page Flow](#main-page-flow)
+7. [State Management](#state-management)
+8. [Testing](#testing)
 
 ---
 
@@ -25,6 +26,8 @@ frontend_mini_app/src/
 ├── app/
 │   ├── layout.tsx          # Root layout with Geist fonts
 │   ├── page.tsx            # Main page with order flow (user role)
+│   ├── profile/
+│   │   └── page.tsx        # User profile page (all users)
 │   ├── manager/
 │   │   └── page.tsx        # Manager admin panel (manager role)
 │   └── globals.css         # Tailwind + custom styles
@@ -46,6 +49,10 @@ frontend_mini_app/src/
     │   └── ExtrasSection.tsx
     ├── Cart/
     │   └── CheckoutButton.tsx
+    ├── Profile/            # Profile page components
+    │   ├── ProfileStats.tsx
+    │   ├── ProfileRecommendations.tsx
+    │   └── ProfileBalance.tsx
     └── Manager/            # Manager-only components
         ├── UserList.tsx
         ├── UserForm.tsx
@@ -55,7 +62,8 @@ frontend_mini_app/src/
         ├── ComboForm.tsx
         ├── MenuItemForm.tsx
         ├── RequestsList.tsx
-        └── ReportsList.tsx
+        ├── ReportsList.tsx
+        └── BalanceManager.tsx
 ```
 
 ---
@@ -187,6 +195,27 @@ interface ListResponse<T> {
   items: T[];
   total?: number;
 }
+
+interface BalanceResponse {
+  tgid: number;
+  weekly_limit: number | null;
+  spent_this_week: number;
+  remaining: number | null;
+}
+
+interface OrderStats {
+  orders_last_30_days: number;
+  categories: { [category: string]: { count: number; percent: number } };
+  unique_dishes: number;
+  favorite_dishes: { name: string; count: number }[];
+}
+
+interface RecommendationsResponse {
+  summary: string | null;
+  tips: string[];
+  stats: OrderStats;
+  generated_at: string | null;
+}
 ```
 
 ---
@@ -242,6 +271,27 @@ useOrders(filters?: { date?: string; cafeId?: number; status?: string }): {
   isLoading: boolean;
   mutate: () => void;
 }
+
+// Fetch user recommendations (AI-generated)
+useUserRecommendations(tgid: number | null): {
+  data: RecommendationsResponse | undefined;
+  error: Error | undefined;
+  isLoading: boolean;
+  mutate: () => void;
+}
+
+// Fetch user balance information
+useUserBalance(tgid: number | null): {
+  data: BalanceResponse | undefined;
+  error: Error | undefined;
+  isLoading: boolean;
+  mutate: () => void;
+}
+
+// Update user balance limit (manager only)
+useUpdateBalanceLimit(): {
+  updateLimit: (tgid: number, weekly_limit: number | null) => Promise<User>;
+}
 ```
 
 **Features:**
@@ -259,6 +309,11 @@ const { data: combos } = useCombos(selectedCafe?.id ?? null);
 const { data: menuItems } = useMenu(selectedCafe?.id ?? null);
 const { data: extras } = useMenu(selectedCafe?.id ?? null, "extra");
 const { createOrder, isLoading: orderLoading } = useCreateOrder();
+
+// Profile page hooks
+const { data: recommendations } = useUserRecommendations(user.tgid);
+const { data: balance } = useUserBalance(user.tgid);
+const { updateLimit } = useUpdateBalanceLimit();
 ```
 
 ---
@@ -514,6 +569,295 @@ interface CheckoutButtonProps {
 
 ---
 
+## Profile Components
+
+Components for displaying user profile information, statistics, and balance management.
+
+**Location:** `frontend_mini_app/src/components/Profile/`
+
+### ProfileStats
+
+**Path:** `frontend_mini_app/src/components/Profile/ProfileStats.tsx`
+
+**Назначение:** Отображает статистику заказов пользователя за последние 30 дней
+
+**Props:**
+| Prop | Тип | Описание |
+|------|-----|----------|
+| stats | OrderStats | Статистика заказов пользователя |
+
+**Использование:**
+```tsx
+import ProfileStats from "@/components/Profile/ProfileStats";
+
+<ProfileStats stats={recommendations.stats} />
+```
+
+**Особенности:**
+- Отображает количество заказов за последние 30 дней
+- Показывает распределение по категориям (суп, салат, основное и т.д.) с процентами
+- Отображает количество уникальных блюд
+- Показывает топ-5 любимых блюд с количеством заказов
+- Empty state: "Пока нет заказов" если нет заказов за 30 дней
+
+**Category Labels Mapping:**
+```typescript
+const categoryLabels: { [key: string]: string } = {
+  soup: "Супы",
+  salad: "Салаты",
+  main: "Основное",
+  extra: "Дополнительно",
+  side: "Гарниры",
+  drink: "Напитки",
+  dessert: "Десерты",
+};
+```
+
+**Дизайн:**
+- Semi-transparent card с backdrop blur
+- Purple gradient header icon (FaChartLine)
+- Nested cards для каждого раздела статистики
+- Русская pluralization для "заказ/заказа/заказов"
+- Процентные значения с одним знаком после запятой
+
+---
+
+### ProfileRecommendations
+
+**Path:** `frontend_mini_app/src/components/Profile/ProfileRecommendations.tsx`
+
+**Назначение:** Отображает AI-рекомендации по питанию на основе истории заказов
+
+**Props:**
+| Prop | Тип | Описание |
+|------|-----|----------|
+| recommendations | RecommendationsResponse | Объект с рекомендациями и статистикой |
+
+**Использование:**
+```tsx
+import ProfileRecommendations from "@/components/Profile/ProfileRecommendations";
+
+<ProfileRecommendations recommendations={recommendations} />
+```
+
+**Особенности:**
+- Отображает текстовый summary (персональное резюме привычек питания)
+- Показывает список рекомендаций (tips) как маркированный список
+- Отображает дату генерации рекомендаций в формате "DD Month YYYY"
+- Empty state: "Сделайте минимум 5 заказов для получения рекомендаций" если summary === null
+
+**Date Formatting:**
+```typescript
+const formatDate = (isoString: string | null) => {
+  if (!isoString) return null;
+  return new Date(isoString).toLocaleDateString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+```
+
+**Дизайн:**
+- Semi-transparent card с backdrop blur
+- Purple gradient header icon (FaLightbulb)
+- Tips отображаются с `list-disc list-inside` для bullet points
+- Generated date в правом нижнем углу мелким текстом
+
+---
+
+### ProfileBalance
+
+**Path:** `frontend_mini_app/src/components/Profile/ProfileBalance.tsx`
+
+**Назначение:** Отображает информацию о корпоративном балансе пользователя
+
+**Props:**
+| Prop | Тип | Описание |
+|------|-----|----------|
+| balance | BalanceResponse | Объект с балансом пользователя |
+
+**Использование:**
+```tsx
+import ProfileBalance from "@/components/Profile/ProfileBalance";
+
+<ProfileBalance balance={balance} />
+```
+
+**Особенности:**
+- Отображает недельный лимит (weekly_limit) или "Не установлен"
+- Показывает потраченную сумму (spent_this_week) с двумя знаками после запятой
+- Отображает остаток (remaining) или "—" если лимит не установлен
+- Progress bar с динамическим цветом:
+  - Зеленый: < 70% лимита потрачено
+  - Желтый: 70-90% лимита потрачено
+  - Красный: > 90% лимита потрачено
+- Progress bar показывается только если weekly_limit !== null
+
+**Progress Bar Logic:**
+```typescript
+const getProgressColor = (percent: number) => {
+  if (percent < 70) return "bg-green-500";
+  if (percent < 90) return "bg-yellow-500";
+  return "bg-red-500";
+};
+
+const percent =
+  balance.weekly_limit !== null
+    ? (balance.spent_this_week / balance.weekly_limit) * 100
+    : 0;
+```
+
+**Дизайн:**
+- Semi-transparent card с backdrop blur
+- Purple gradient header icon (FaWallet)
+- Все суммы форматируются с `.toFixed(2)` → "XXX.XX ₽"
+- Progress bar: `bg-gray-700` background, динамический цвет для прогресса
+- Progress bar ограничен 100% максимумом (`Math.min(percent, 100)`)
+
+---
+
+### Profile Page
+
+**Path:** `frontend_mini_app/src/app/profile/page.tsx`
+
+**Назначение:** Страница профиля пользователя с отображением статистики, рекомендаций и баланса
+
+**Route:** `/profile`
+
+**Доступ:** Все пользователи (user и manager)
+
+**Features:**
+
+1. **Authentication:**
+   - Получает user object из localStorage
+   - Redirect на `/` если user не найден
+   - Error handling для invalid JSON
+
+2. **Data Fetching:**
+   - `useUserRecommendations(user.tgid)` - параллельная загрузка рекомендаций
+   - `useUserBalance(user.tgid)` - параллельная загрузка баланса
+   - Conditional fetching: skip if user is null
+
+3. **Layout:**
+   - Header: "Мой профиль" + back button (FaArrowLeft → `/`)
+   - ProfileStats component
+   - ProfileRecommendations component
+   - ProfileBalance component
+
+4. **States:**
+   - Loading: Skeleton placeholders с shimmer эффектом
+   - Error: Red error banners с сообщениями
+   - Empty: Gray placeholder cards
+   - Loaded: Display components с данными
+
+**Navigation:**
+```tsx
+// Header button в app/page.tsx
+<button
+  onClick={() => router.push("/profile")}
+  className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg"
+  aria-label="Профиль"
+>
+  <FaUser className="text-white text-xl" />
+</button>
+```
+
+**Background:**
+- Dark background: `#130F30`
+- Purple gradient blurs для визуального эффекта
+- Consistent с дизайн-системой главной страницы
+
+**Example Usage:**
+```typescript
+// Redirect to profile
+router.push("/profile");
+
+// From main page
+const handleProfileClick = () => {
+  router.push("/profile");
+};
+```
+
+---
+
+## Navigation Components
+
+### Manager Navigation Button
+
+**Location:** `frontend_mini_app/src/app/page.tsx` (lines 320-329)
+
+**Description:** Fixed position button that allows managers to navigate to the admin panel.
+
+**Visibility:** Only visible for users with `role === "manager"`
+
+**Features:**
+- Fixed positioning in top-right corner
+- Purple gradient background
+- Responsive text (icon only on mobile, icon + text on desktop)
+- Smooth hover effect
+- Accessibility support (aria-label)
+
+**Implementation:**
+```tsx
+{user?.role === "manager" && (
+  <button
+    onClick={() => router.push("/manager")}
+    className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white shadow-lg hover:opacity-90 transition-opacity"
+    aria-label="Панель менеджера"
+  >
+    <FaUserShield className="text-lg" />
+    <span className="hidden sm:inline text-sm font-medium">Панель менеджера</span>
+  </button>
+)}
+```
+
+**Icon:** `FaUserShield` from `react-icons/fa6`
+
+**Styling:**
+- Position: `fixed top-4 right-4 z-50`
+- Background: `bg-gradient-to-r from-[#8B23CB] to-[#A020F0]`
+- Text visibility: `hidden sm:inline` (mobile: icon only, desktop: icon + text)
+- Dimensions: `px-4 py-3` (touch-friendly ~44-48px)
+
+---
+
+### User Interface Button (Manager Panel)
+
+**Location:** `frontend_mini_app/src/app/manager/page.tsx` (lines 206-214)
+
+**Description:** Button in manager panel header that allows managers to navigate to the user ordering interface.
+
+**Visibility:** Always visible on manager panel (managers only have access to this page)
+
+**Features:**
+- Header positioning
+- Purple gradient background
+- Responsive text (icon only on mobile, icon + text on desktop)
+- Smooth hover effect
+- Accessibility support (aria-label)
+
+**Implementation:**
+```tsx
+<button
+  onClick={() => router.push("/")}
+  className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white shadow-lg hover:opacity-90 transition-opacity"
+  aria-label="Сделать заказ"
+>
+  <FaCartShopping className="text-lg" />
+  <span className="hidden sm:inline text-sm font-medium">Сделать заказ</span>
+</button>
+```
+
+**Icon:** `FaCartShopping` from `react-icons/fa6`
+
+**Styling:**
+- Background: `bg-gradient-to-r from-[#8B23CB] to-[#A020F0]`
+- Text visibility: `hidden sm:inline` (mobile: icon only, desktop: icon + text)
+- Dimensions: `px-4 py-3` (touch-friendly ~44-48px)
+
+---
+
 ## Main Page Flow
 
 ### page.tsx
@@ -580,13 +924,28 @@ useEffect(() => {
   }
 
   authenticateWithTelegram(initData)
-    .then(() => setIsAuthenticated(true))
+    .then((response) => {
+      setIsAuthenticated(true);
+      setUser(response.user);
+      console.log("Telegram auth successful");
+
+      // Save user object to localStorage
+      localStorage.setItem("user", JSON.stringify(response.user));
+
+      // Manager can stay on main page - no automatic redirect
+    })
     .catch(err => {
       console.error("Auth failed:", err);
       alert("Ошибка авторизации. Пожалуйста, перезапустите приложение.");
     });
 }, []);
 ```
+
+**Key Changes (TSK-010):**
+- Managers no longer automatically redirected to `/manager` after authentication
+- User object saved to `localStorage` and component state
+- Managers can access both `/` (user interface) and `/manager` (admin panel)
+- Navigation between interfaces handled by dedicated buttons
 
 ### Order Date Selection + Submission
 
@@ -828,7 +1187,7 @@ Administrative interface components for managers.
 
 **Location:** `frontend_mini_app/src/components/Manager/`
 
-### Manager Page
+### Manager Panel (/manager)
 
 **Location:** `frontend_mini_app/src/app/manager/page.tsx`
 
@@ -837,6 +1196,7 @@ Main admin panel with tab-based navigation. Features:
 - Automatic redirect for non-managers to `/`
 - Horizontal scrollable tabs with gradient navigation
 - 5 main sections: Users, Cafes, Menu, Requests, Reports
+- **Navigation button "Сделать заказ" to switch to user interface** (TSK-010)
 
 **Authentication Flow:**
 1. Initialize Telegram WebApp
@@ -845,12 +1205,227 @@ Main admin panel with tab-based navigation. Features:
 4. Redirect non-managers to `/`
 5. Store user object in localStorage
 
+**Header:**
+- App title: "Панель менеджера"
+- Navigation button: "Сделать заказ" → navigates to `/` (user interface)
+- Purple gradient styling consistent with design system
+
 **Tabs:**
 - Users - User management
 - Cafes - Cafe management
 - Menu - Menu and combo management
 - Requests - Cafe connection requests
 - Reports - Order summaries and reports
+
+---
+
+### Manager Panel Architecture (TSK-011)
+
+**Tab Structure:**
+
+The manager panel consists of 5 tabs with fully integrated components:
+
+```
+┌─────────────────────────────────────────┐
+│ Пользователи │ Кафе │ Меню │ Запросы │ Отчёты │
+└─────────────────────────────────────────┘
+```
+
+**State Management Patterns:**
+
+1. **Props-Based Components** (Users, Cafes)
+   - Parent page manages data fetching and state
+   - Components receive data via props
+   - Callbacks for mutations passed from parent
+   - Parent controls form visibility
+
+2. **Self-Contained Components** (Menu, Requests, Reports)
+   - Components manage their own data fetching
+   - Internal state management
+   - No props required from parent
+   - Can be dropped directly into layout
+
+**Tab Implementation:**
+
+#### 1. Users Tab
+
+**Components:** `UserList` + `UserForm`
+
+**State Management:**
+```typescript
+// Parent (manager/page.tsx) manages:
+const [showUserForm, setShowUserForm] = useState(false);
+const { data: users, error, isLoading } = useUsers();
+const { createUser } = useCreateUser();
+const { updateAccess } = useUpdateUserAccess();
+const { deleteUser } = useDeleteUser();
+```
+
+**Integration Pattern:**
+- Toggle button "Добавить пользователя" controls form visibility
+- UserForm receives callback for submission with data
+- UserList receives data and callbacks as props
+- Parent wraps callbacks in try/catch for error handling
+
+**Props:**
+```typescript
+// UserList
+interface UserListProps {
+  users: User[] | undefined;
+  isLoading: boolean;
+  error: Error | undefined;
+  onToggleAccess: (tgid: number, newStatus: boolean) => Promise<void>;
+  onDelete: (tgid: number) => Promise<void>;
+}
+
+// UserForm
+interface UserFormProps {
+  onSubmit: (data: { tgid: number; name: string; office: string }) => Promise<void>;
+  onCancel: () => void;
+}
+```
+
+#### 2. Cafes Tab
+
+**Components:** `CafeList` + `CafeForm`
+
+**State Management:**
+```typescript
+// Parent manages:
+const [showCafeForm, setShowCafeForm] = useState(false);
+const [editingCafe, setEditingCafe] = useState<Cafe | null>(null);
+```
+
+**Integration Pattern:**
+- CafeList fetches data internally via `useCafes(false)`
+- CafeForm handles API calls internally (createCafe/updateCafe)
+- Parent only manages form visibility and edit mode
+- Form has dual mode: create (showCafeForm=true) / edit (editingCafe!=null)
+
+**Props:**
+```typescript
+// CafeList
+interface CafeListProps {
+  onEdit?: (cafe: Cafe) => void;
+}
+
+// CafeForm
+interface CafeFormProps {
+  mode: "create" | "edit";
+  initialData?: Cafe;
+  onSubmit: () => void;  // No parameters - form handles API internally
+  onCancel: () => void;
+}
+```
+
+**Note:** CafeForm differs from UserForm - it calls API internally and only notifies parent of completion via `onSubmit()`.
+
+#### 3. Menu Tab
+
+**Component:** `MenuManager`
+
+**Integration Pattern:**
+- Completely self-contained
+- No props required
+- Manages cafe selection, combo/menu CRUD internally
+- Drop-in component: `<MenuManager />`
+
+**Internal Features:**
+- Cafe selector dropdown
+- Combo sets section with ComboForm
+- Menu items section with MenuItemForm
+- Category grouping
+- Toggle availability
+- Edit/delete actions
+
+#### 4. Requests Tab
+
+**Component:** `RequestsList`
+
+**Integration Pattern:**
+- Self-contained
+- No props required
+- Fetches data via `useCafeRequests()` internally
+- Drop-in component: `<RequestsList />`
+
+**Internal Features:**
+- Display pending cafe requests
+- Approve/reject actions
+- Auto-refresh after mutations
+
+#### 5. Reports Tab
+
+**Component:** `ReportsList`
+
+**Integration Pattern:**
+- Self-contained
+- No props required
+- Fetches data via `useSummaries()` internally
+- Drop-in component: `<ReportsList />`
+
+**Internal Features:**
+- Create summary form (cafe + date)
+- Display existing summaries
+- Delete summaries
+- Summary details display
+
+**API Hooks Used:**
+
+```typescript
+// Users Tab
+useUsers()
+useCreateUser()
+useUpdateUserAccess()
+useDeleteUser()
+
+// Cafes Tab (only in CafeForm component, not in page.tsx)
+useCafes(false)  // inside CafeList
+useCreateCafe()  // inside CafeForm
+useUpdateCafe()  // inside CafeForm
+useUpdateCafeStatus()  // inside CafeList
+useDeleteCafe()  // inside CafeList
+
+// Menu Tab (all inside MenuManager)
+useCombos(cafeId)
+useMenu(cafeId, category?)
+useCreateCombo(), useUpdateCombo(), useDeleteCombo()
+useCreateMenuItem(), useUpdateMenuItem(), useDeleteMenuItem()
+
+// Requests Tab (inside RequestsList)
+useCafeRequests()
+useApproveCafeRequest()
+useRejectCafeRequest()
+
+// Reports Tab (inside ReportsList)
+useSummaries()
+useCreateSummary()
+useDeleteSummary()
+```
+
+**Error Handling:**
+
+All callbacks wrapped in try/catch:
+```typescript
+onSubmit={async (data) => {
+  try {
+    await createUser(data);
+    setShowUserForm(false);
+  } catch (err) {
+    console.error("Failed to create user:", err);
+  }
+}}
+```
+
+**UI Consistency:**
+
+All components use the same design system:
+- Background: `bg-white/5 backdrop-blur-md`
+- Borders: `border border-white/10`
+- Buttons: `bg-gradient-to-r from-[#8B23CB] to-[#A020F0]`
+- Spacing: `space-y-6` between sections
+- Loading states: skeleton placeholders
+- Error states: red banners
+- Empty states: gray text messages
 
 ### UserList / UserForm
 
@@ -987,6 +1562,130 @@ Main admin panel with tab-based navigation. Features:
 - Date picker
 - Generates report for selected cafe and date
 
+---
+
+### BalanceManager
+
+**Component:** `BalanceManager.tsx`
+
+**Location:** `frontend_mini_app/src/components/Manager/BalanceManager.tsx`
+
+**Назначение:** Управление корпоративными балансами пользователей (недельные лимиты расходов)
+
+**Access:** Manager only (via manager panel `/manager` → tab "Балансы")
+
+**Features:**
+
+1. **User List Display:**
+   - Отображает всех пользователей с балансами
+   - Для каждого пользователя показывает:
+     - Имя, офис, Telegram ID
+     - Недельный лимит (weekly_limit)
+     - Потрачено на этой неделе (spent_this_week)
+     - Остаток (remaining)
+   - Кнопка редактирования для каждого пользователя
+
+2. **Edit Modal:**
+   - Input поле для установки нового лимита
+   - Кнопка "Сохранить" - устанавливает новый лимит
+   - Кнопка "Снять лимит" - устанавливает weekly_limit = null
+   - Validation: только положительные числа
+   - Confirm dialog перед снятием лимита
+
+3. **Lazy Loading:**
+   - Использует `UserBalanceRow` компонент для каждого пользователя
+   - Каждый row загружает свой баланс через `useUserBalance(user.tgid)`
+   - SWR кэширование смягчает N+1 запросы
+
+4. **States:**
+   - Loading: Skeleton placeholders (3 items)
+   - Error: Red error banner
+   - Empty: "Нет пользователей" message
+   - Saving: Disabled buttons с spinner
+
+**Hooks:**
+```typescript
+const { data: users, isLoading, error } = useUsers();
+const { data: balance } = useUserBalance(user.tgid); // в UserBalanceRow
+const { updateLimit } = useUpdateBalanceLimit();
+```
+
+**Usage:**
+```tsx
+// В manager/page.tsx
+{activeTab === "balances" && (
+  <div className="text-white">
+    <BalanceManager />
+  </div>
+)}
+```
+
+**Edit Limit Examples:**
+```typescript
+// Set limit to 5000 руб
+await updateLimit(user.tgid, 5000.00);
+
+// Remove limit
+await updateLimit(user.tgid, null);
+
+// Update limit to 3500 руб
+await updateLimit(user.tgid, 3500.00);
+```
+
+**UserBalanceRow Component:**
+- Sub-component внутри BalanceManager
+- Lazy загружает баланс для каждого пользователя
+- Отображает user info + balance info
+- Кнопка редактирования открывает modal
+
+**Validation:**
+```typescript
+const limitValue = newLimit.trim() === "" ? null : parseFloat(newLimit);
+
+if (limitValue !== null && (isNaN(limitValue) || limitValue < 0)) {
+  alert("Введите корректное положительное число");
+  return;
+}
+```
+
+**Confirmation Dialog:**
+```typescript
+if (!confirm(`Снять лимит для пользователя ${editingUser.name}?`)) {
+  return;
+}
+```
+
+**Дизайн:**
+- Таблица/список с semi-transparent rows
+- Purple gradient кнопки редактирования
+- Modal overlay с темным фоном
+- Decimal formatting `.toFixed(2)` для всех сумм
+- Loading states во время операций
+- Disabled buttons во время saving
+
+**Tab Integration:**
+
+В `manager/page.tsx`:
+
+```typescript
+const tabs: { id: TabId; name: string; icon: JSX.Element }[] = [
+  { id: "users", name: "Пользователи", icon: <FaUser /> },
+  { id: "balances", name: "Балансы", icon: <FaWallet /> },  // New tab
+  { id: "cafes", name: "Кафе", icon: <FaStore /> },
+  { id: "menu", name: "Меню", icon: <FaUtensils /> },
+  { id: "requests", name: "Запросы", icon: <FaEnvelope /> },
+  { id: "reports", name: "Отчёты", icon: <FaFileAlt /> },
+];
+
+// Render
+{activeTab === "balances" && <BalanceManager />}
+```
+
+**Trade-offs:**
+- N+1 запросов для балансов (нет batch endpoint `/users/balances`)
+- Mitigation: SWR кэширование, lazy loading через UserBalanceRow
+- Alternative: создать batch endpoint на backend (future improvement)
+
 ### Common Manager Component Patterns
 
 **Loading States:**
@@ -1087,6 +1786,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 | `GET /cafes/{id}/menu` | `useMenu(cafeId)` | Fetch menu items |
 | `GET /cafes/{id}/menu?category=extra` | `useMenu(cafeId, "extra")` | Fetch extras |
 | `POST /orders` | `useCreateOrder()` | Create new order |
+| `GET /users/{tgid}/recommendations` | `useUserRecommendations(tgid)` | Fetch AI recommendations |
+| `GET /users/{tgid}/balance` | `useUserBalance(tgid)` | Fetch user balance |
 
 ### Manager Endpoints
 
@@ -1098,6 +1799,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 | `POST /users` | `useCreateUser()` | Create new user |
 | `PATCH /users/{tgid}/access` | `useUpdateUserAccess()` | Toggle user access |
 | `DELETE /users/{tgid}` | `useDeleteUser()` | Delete user |
+| `PATCH /users/{tgid}/balance/limit` | `useUpdateBalanceLimit()` | Update weekly limit |
 
 **Cafe Management:**
 

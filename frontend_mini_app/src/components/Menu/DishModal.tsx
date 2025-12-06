@@ -8,7 +8,7 @@ type Dish = {
   name: string;
   description: string;
   price: number;
-  categoryId: number;
+  categoryId: string;
   composition?: string[];
   suitableFor?: string[];
 };

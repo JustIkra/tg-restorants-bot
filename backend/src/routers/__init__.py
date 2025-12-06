@@ -1,5 +1,5 @@
 from .auth import router as auth_router
-from .cafe_links import router as cafe_links_router
+from .cafe_links import cafe_links_router, cafe_requests_router
 from .cafes import router as cafes_router
 from .deadlines import router as deadlines_router
 from .health import router as health_router
@@ -14,6 +14,7 @@ __all__ = [
     "users_router",
     "cafes_router",
     "cafe_links_router",
+    "cafe_requests_router",
     "menu_router",
     "deadlines_router",
     "orders_router",

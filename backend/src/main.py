@@ -7,6 +7,7 @@ from .config import settings
 from .routers import (
     auth_router,
     cafe_links_router,
+    cafe_requests_router,
     cafes_router,
     deadlines_router,
     health_router,
@@ -43,6 +44,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(cafes_router, prefix="/api/v1")
 app.include_router(cafe_links_router, prefix="/api/v1")
+app.include_router(cafe_requests_router, prefix="/api/v1")
 app.include_router(menu_router, prefix="/api/v1")
 app.include_router(deadlines_router, prefix="/api/v1")
 app.include_router(orders_router, prefix="/api/v1")

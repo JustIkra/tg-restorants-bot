@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.0-flash-exp"
     GEMINI_MAX_REQUESTS_PER_KEY: int = 195
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @property
     def gemini_keys_list(self) -> list[str]:

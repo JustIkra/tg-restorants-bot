@@ -3,7 +3,6 @@
 "use client";
 
 import useSWR, { useSWRConfig } from "swr";
-import type { SWRResponse } from "swr";
 import { useState } from "react";
 import { apiRequest } from "./client";
 import type {
@@ -16,6 +15,8 @@ import type {
   ListResponse,
   CafeRequest,
   Summary,
+  BalanceResponse,
+  RecommendationsResponse,
 } from "./types";
 
 interface UseDataResult<T> {
@@ -32,11 +33,12 @@ const fetcher = <T,>(endpoint: string) => apiRequest<T>(endpoint);
 
 /**
  * Hook to fetch cafes
+ * @param shouldFetch - If false, skip fetching (useful for waiting for auth)
  * @param activeOnly - If true, filter only active cafes
  */
-export function useCafes(activeOnly = true): UseDataResult<Cafe> {
+export function useCafes(shouldFetch = true, activeOnly = true): UseDataResult<Cafe> {
   const { data, error, isLoading, mutate } = useSWR<ListResponse<Cafe>>(
-    `/cafes${activeOnly ? "?active_only=true" : ""}`,
+    shouldFetch ? `/cafes${activeOnly ? "?active_only=true" : ""}` : null,
     fetcher
   );
   return {
@@ -528,4 +530,49 @@ export function useDeleteMenuItem() {
     mutate(`/cafes/${cafeId}/menu`);
   };
   return { deleteMenuItem };
+}
+
+// ========================================
+// User Profile Hooks
+// ========================================
+
+/**
+ * Hook to fetch user recommendations
+ * @param tgid - User's Telegram ID (null to skip fetching)
+ */
+export function useUserRecommendations(tgid: number | null) {
+  const { data, error, isLoading, mutate } = useSWR<RecommendationsResponse>(
+    tgid ? `/users/${tgid}/recommendations` : null,
+    fetcher
+  );
+  return { data, error, isLoading, mutate };
+}
+
+/**
+ * Hook to fetch user balance
+ * @param tgid - User's Telegram ID (null to skip fetching)
+ */
+export function useUserBalance(tgid: number | null) {
+  const { data, error, isLoading, mutate } = useSWR<BalanceResponse>(
+    tgid ? `/users/${tgid}/balance` : null,
+    fetcher
+  );
+  return { data, error, isLoading, mutate };
+}
+
+/**
+ * Hook to update user balance limit (manager only)
+ */
+export function useUpdateBalanceLimit() {
+  const { mutate } = useSWRConfig();
+  const updateLimit = async (tgid: number, weekly_limit: number | null) => {
+    const result = await apiRequest<User>(`/users/${tgid}/balance/limit`, {
+      method: "PATCH",
+      body: JSON.stringify({ weekly_limit })
+    });
+    mutate(`/users/${tgid}/balance`);
+    mutate("/users");
+    return result;
+  };
+  return { updateLimit };
 }

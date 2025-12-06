@@ -12,6 +12,8 @@ import {
   FaChartBar,
   FaChevronLeft,
   FaChevronRight,
+  FaCartShopping,
+  FaWallet,
 } from "react-icons/fa6";
 
 import { authenticateWithTelegram } from "@/lib/api/client";
@@ -20,8 +22,23 @@ import {
   initTelegramWebApp,
   getTelegramInitData,
 } from "@/lib/telegram/webapp";
+import {
+  useUsers,
+  useCreateUser,
+  useUpdateUserAccess,
+  useDeleteUser,
+} from "@/lib/api/hooks";
+import type { Cafe } from "@/lib/api/types";
+import UserList from "@/components/Manager/UserList";
+import UserForm from "@/components/Manager/UserForm";
+import CafeList from "@/components/Manager/CafeList";
+import CafeForm from "@/components/Manager/CafeForm";
+import MenuManager from "@/components/Manager/MenuManager";
+import RequestsList from "@/components/Manager/RequestsList";
+import ReportsList from "@/components/Manager/ReportsList";
+import BalanceManager from "@/components/Manager/BalanceManager";
 
-type TabId = "users" | "cafes" | "menu" | "requests" | "reports";
+type TabId = "users" | "balances" | "cafes" | "menu" | "requests" | "reports";
 
 interface Tab {
   id: TabId;
@@ -31,6 +48,7 @@ interface Tab {
 
 const tabs: Tab[] = [
   { id: "users", name: "Пользователи", icon: <FaUsers /> },
+  { id: "balances", name: "Балансы", icon: <FaWallet /> },
   { id: "cafes", name: "Кафе", icon: <FaStore /> },
   { id: "menu", name: "Меню", icon: <FaUtensils /> },
   { id: "requests", name: "Запросы", icon: <FaEnvelope /> },
@@ -39,12 +57,7 @@ const tabs: Tab[] = [
 
 export default function ManagerPage() {
   const router = useRouter();
-  const [isInTelegram] = useState<boolean | null>(() => {
-    if (typeof window !== 'undefined') {
-      return isTelegramWebApp();
-    }
-    return null;
-  });
+  const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("users");
@@ -52,9 +65,21 @@ export default function ManagerPage() {
   const [showLeftGradient, setShowLeftGradient] = useState(false);
   const [showRightGradient, setShowRightGradient] = useState(false);
 
+  // Users tab state
+  const [showUserForm, setShowUserForm] = useState(false);
+  const { data: users, error: usersError, isLoading: usersLoading } = useUsers();
+  const { createUser } = useCreateUser();
+  const { updateAccess } = useUpdateUserAccess();
+  const { deleteUser } = useDeleteUser();
+
+  // Cafes tab state
+  const [showCafeForm, setShowCafeForm] = useState(false);
+  const [editingCafe, setEditingCafe] = useState<Cafe | null>(null);
+
   // Check if running in Telegram and authenticate
   useEffect(() => {
-    const inTelegram = isInTelegram;
+    const inTelegram = isTelegramWebApp();
+    setIsInTelegram(inTelegram);
 
     if (!inTelegram) {
       return;
@@ -193,12 +218,24 @@ export default function ManagerPage() {
       <div className="relative w-full md:w-[90%] min-h-screen mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-none md:rounded-2xl overflow-visible">
         {/* Header */}
         <div className="px-4 pt-6 md:px-6 pb-4 border-b border-white/10">
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
-            Панель менеджера
-          </h1>
-          <p className="text-gray-300 text-sm md:text-base">
-            Управление системой заказов обедов
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">
+                Панель менеджера
+              </h1>
+              <p className="text-gray-300 text-sm md:text-base">
+                Управление системой заказов обедов
+              </p>
+            </div>
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white shadow-lg hover:opacity-90 transition-opacity"
+              aria-label="Сделать заказ"
+            >
+              <FaCartShopping className="text-lg" />
+              <span className="hidden sm:inline text-sm font-medium">Сделать заказ</span>
+            </button>
+          </div>
         </div>
 
         {/* Tabs navigation */}
@@ -257,57 +294,116 @@ export default function ManagerPage() {
         {/* Content area */}
         <div className="px-4 md:px-6 py-6">
           {activeTab === "users" && (
-            <div className="text-white">
-              <h2 className="text-xl font-bold mb-4">Управление пользователями</h2>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <p className="text-gray-300 text-center">
-                  Компонент UserList будет здесь (Подзадача 4)
-                </p>
+            <div className="text-white space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Управление пользователями</h2>
+                <button
+                  onClick={() => setShowUserForm(!showUserForm)}
+                  className="px-4 py-2 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white font-medium hover:opacity-90 transition-opacity"
+                >
+                  {showUserForm ? "Отмена" : "Добавить пользователя"}
+                </button>
               </div>
+
+              {showUserForm && (
+                <div className="bg-white/5 border border-white/10 rounded-lg p-6">
+                  <UserForm
+                    onSubmit={async (data) => {
+                      try {
+                        await createUser(data);
+                        setShowUserForm(false);
+                      } catch (err) {
+                        console.error("Failed to create user:", err);
+                        // UserForm should show error if needed
+                      }
+                    }}
+                    onCancel={() => setShowUserForm(false)}
+                  />
+                </div>
+              )}
+
+              <UserList
+                users={users}
+                isLoading={usersLoading}
+                error={usersError}
+                onToggleAccess={async (tgid, newStatus) => {
+                  try {
+                    await updateAccess(tgid, newStatus);
+                  } catch (err) {
+                    console.error("Failed to toggle access:", err);
+                  }
+                }}
+                onDelete={async (tgid) => {
+                  try {
+                    await deleteUser(tgid);
+                  } catch (err) {
+                    console.error("Failed to delete user:", err);
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {activeTab === "balances" && (
+            <div className="text-white">
+              <BalanceManager />
             </div>
           )}
 
           {activeTab === "cafes" && (
-            <div className="text-white">
-              <h2 className="text-xl font-bold mb-4">Управление кафе</h2>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <p className="text-gray-300 text-center">
-                  Компонент CafeList будет здесь (Подзадача 5)
-                </p>
+            <div className="text-white space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Управление кафе</h2>
+                <button
+                  onClick={() => {
+                    setEditingCafe(null);
+                    setShowCafeForm(!showCafeForm);
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white font-medium hover:opacity-90 transition-opacity"
+                >
+                  {showCafeForm ? "Отмена" : "Добавить кафе"}
+                </button>
               </div>
+
+              {(showCafeForm || editingCafe) && (
+                <CafeForm
+                  mode={editingCafe ? "edit" : "create"}
+                  initialData={editingCafe || undefined}
+                  onSubmit={() => {
+                    setShowCafeForm(false);
+                    setEditingCafe(null);
+                  }}
+                  onCancel={() => {
+                    setShowCafeForm(false);
+                    setEditingCafe(null);
+                  }}
+                />
+              )}
+
+              <CafeList
+                onEdit={(cafe) => {
+                  setEditingCafe(cafe);
+                  setShowCafeForm(false);
+                }}
+              />
             </div>
           )}
 
           {activeTab === "menu" && (
             <div className="text-white">
-              <h2 className="text-xl font-bold mb-4">Управление меню</h2>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <p className="text-gray-300 text-center">
-                  Компонент MenuManager будет здесь (Подзадача 6)
-                </p>
-              </div>
+              <MenuManager />
             </div>
           )}
 
           {activeTab === "requests" && (
             <div className="text-white">
-              <h2 className="text-xl font-bold mb-4">Запросы на подключение</h2>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <p className="text-gray-300 text-center">
-                  Компонент RequestsList будет здесь (Подзадача 7)
-                </p>
-              </div>
+              <RequestsList />
             </div>
           )}
 
           {activeTab === "reports" && (
             <div className="text-white">
-              <h2 className="text-xl font-bold mb-4">Отчёты</h2>
-              <div className="bg-white/5 border border-white/10 rounded-lg p-6">
-                <p className="text-gray-300 text-center">
-                  Компонент ReportsList будет здесь (Подзадача 7)
-                </p>
-              </div>
+              <ReportsList />
             </div>
           )}
         </div>

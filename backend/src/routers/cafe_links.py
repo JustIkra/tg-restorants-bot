@@ -15,14 +15,18 @@ from ..schemas.cafe_link import (
 )
 from ..services.cafe_link import CafeLinkService
 
-router = APIRouter(prefix="/cafes", tags=["cafe-links"])
+# Router for cafe-specific endpoints (with /cafes prefix)
+cafe_links_router = APIRouter(prefix="/cafes", tags=["cafe-links"])
+
+# Router for cafe-requests endpoints (no prefix, to get /api/v1/cafe-requests)
+cafe_requests_router = APIRouter(tags=["cafe-requests"])
 
 
 def get_cafe_link_service(db: Annotated[AsyncSession, Depends(get_db)]) -> CafeLinkService:
     return CafeLinkService(db)
 
 
-@router.post("/{cafe_id}/link-request", response_model=LinkRequestSchema, status_code=201)
+@cafe_links_router.post("/{cafe_id}/link-request", response_model=LinkRequestSchema, status_code=201)
 async def create_link_request(
     cafe_id: int,
     data: CreateLinkRequestSchema,
@@ -37,7 +41,7 @@ async def create_link_request(
     return await service.create_link_request(cafe_id, data)
 
 
-@router.get("/cafe-requests", response_model=LinkRequestListSchema)
+@cafe_requests_router.get("/cafe-requests", response_model=LinkRequestListSchema)
 async def list_cafe_requests(
     manager: ManagerUser,
     service: Annotated[CafeLinkService, Depends(get_cafe_link_service)],
@@ -53,7 +57,7 @@ async def list_cafe_requests(
     return await service.list_requests(skip=skip, limit=limit, status=status)
 
 
-@router.post("/cafe-requests/{request_id}/approve", response_model=LinkRequestSchema)
+@cafe_requests_router.post("/cafe-requests/{request_id}/approve", response_model=LinkRequestSchema)
 async def approve_cafe_request(
     request_id: int,
     manager: ManagerUser,
@@ -68,7 +72,7 @@ async def approve_cafe_request(
     return await service.approve_request(request_id)
 
 
-@router.post("/cafe-requests/{request_id}/reject", response_model=LinkRequestSchema)
+@cafe_requests_router.post("/cafe-requests/{request_id}/reject", response_model=LinkRequestSchema)
 async def reject_cafe_request(
     request_id: int,
     manager: ManagerUser,
@@ -82,7 +86,7 @@ async def reject_cafe_request(
     return await service.reject_request(request_id)
 
 
-@router.patch("/{cafe_id}/notifications", response_model=CafeResponse)
+@cafe_links_router.patch("/{cafe_id}/notifications", response_model=CafeResponse)
 async def update_cafe_notifications(
     cafe_id: int,
     data: UpdateNotificationsSchema,
@@ -97,7 +101,7 @@ async def update_cafe_notifications(
     return await service.update_notifications(cafe_id, data.enabled)
 
 
-@router.delete("/{cafe_id}/link", response_model=CafeResponse)
+@cafe_links_router.delete("/{cafe_id}/link", response_model=CafeResponse)
 async def unlink_cafe_telegram(
     cafe_id: int,
     manager: ManagerUser,

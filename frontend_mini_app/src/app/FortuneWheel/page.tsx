@@ -27,30 +27,9 @@ export default function FortuneWheel() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [canSpin, setCanSpin] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const lastSpin = localStorage.getItem("lastSpin");
-      if (lastSpin) {
-        const nextSpinTime = parseInt(lastSpin) + ONE_DAY;
-        const now = Date.now();
-        return now >= nextSpinTime;
-      }
-    }
-    return true;
-  });
-  const [timeLeft, setTimeLeft] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const lastSpin = localStorage.getItem("lastSpin");
-      if (lastSpin) {
-        const nextSpinTime = parseInt(lastSpin) + ONE_DAY;
-        const now = Date.now();
-        if (now < nextSpinTime) {
-          return nextSpinTime - now;
-        }
-      }
-    }
-    return 0;
-  });
+  const [mounted, setMounted] = useState(false);
+  const [canSpin, setCanSpin] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
 
   const isSpinningRef = useRef(false);
   const gradientShift = useRef(0);
@@ -60,6 +39,23 @@ export default function FortuneWheel() {
   const numberOfItems = dishes.length;
   const arc = (2 * Math.PI) / numberOfItems;
   const baseColors = ["#9d4edd", "#7b2cbf", "#8a2be2", "#6a0dad"];
+
+  useEffect(() => {
+    setMounted(true);
+    const lastSpin = localStorage.getItem("lastSpin");
+    if (lastSpin) {
+      const nextSpinTime = parseInt(lastSpin) + ONE_DAY;
+      const now = Date.now();
+      if (now >= nextSpinTime) {
+        setCanSpin(true);
+      } else {
+        setCanSpin(false);
+        setTimeLeft(nextSpinTime - now);
+      }
+    } else {
+      setCanSpin(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (canSpin) return;
@@ -252,7 +248,7 @@ export default function FortuneWheel() {
       >
         {isSpinning
           ? "Крутим..."
-          : canSpin
+          : !mounted || canSpin
           ? "Крутить колесо"
           : `Доступно через: ${formatTime(timeLeft)}`}
       </button>

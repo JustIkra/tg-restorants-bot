@@ -97,9 +97,10 @@ export interface ListResponse<T> {
 }
 
 export interface BalanceResponse {
-  balance: number;
-  weekly_limit: number;
+  tgid: number;
+  weekly_limit: number | null;
   spent_this_week: number;
+  remaining: number | null;
 }
 
 export interface OrderAvailabilityResponse {
@@ -123,4 +124,18 @@ export interface Summary {
   date: string;
   status: "pending" | "completed";
   created_at: string;
+}
+
+export interface OrderStats {
+  orders_last_30_days: number;
+  categories: { [category: string]: { count: number; percent: number } };
+  unique_dishes: number;
+  favorite_dishes: { name: string; count: number }[];
+}
+
+export interface RecommendationsResponse {
+  summary: string | null;
+  tips: string[];
+  stats: OrderStats;
+  generated_at: string | null;
 }

@@ -16,7 +16,9 @@ import {
   FaUtensils,
   FaCartShopping,
   FaSpinner,
-  FaTriangleExclamation
+  FaTriangleExclamation,
+  FaUserShield,
+  FaUser
 } from "react-icons/fa6";
 import { useRouter } from "next/navigation";
 
@@ -28,7 +30,7 @@ import ExtrasSection from "@/components/ExtrasSection/ExtrasSection";
 import CartSummary from "@/components/Cart/CartSummary";
 import CheckoutButton from "@/components/Cart/CheckoutButton";
 import TelegramFallback from "@/components/TelegramFallback/TelegramFallback";
-import { useCafes, useCombos, useMenu } from "@/lib/api/hooks";
+import { useCafes, useMenu } from "@/lib/api/hooks";
 import { apiRequest, authenticateWithTelegram } from "@/lib/api/client";
 import { isTelegramWebApp, initTelegramWebApp, getTelegramInitData } from "@/lib/telegram/webapp";
 
@@ -37,10 +39,11 @@ export default function Home() {
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [user, setUser] = useState<{ role: string } | null>(null);
   const [activeCafeId, setActiveCafeId] = useState<number | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | number>("all");
   const [cart, setCart] = useState<{ [key: number]: number }>({});
-  const [selectedDish, setSelectedDish] = useState<any>(null);
+  const [selectedDish, setSelectedDish] = useState<{ id: number; name: string; description: string; price: number; categoryId: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [availableDays, setAvailableDays] = useState<
     { date: string; weekday: string; can_order: boolean; deadline: string | null; reason: string | null }[]
@@ -52,11 +55,10 @@ export default function Home() {
   const rotation = useRef(0);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  // Fetch real data from API using SWR hooks
-  const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(true);
-  const { data: combosData, error: combosError, isLoading: combosLoading } = useCombos(activeCafeId);
-  const { data: menuItems, error: menuError, isLoading: menuLoading } = useMenu(activeCafeId);
-  const { data: extraItems, error: extrasError, isLoading: extrasLoading } = useMenu(activeCafeId, "extra");
+  // Fetch real data from API using SWR hooks (only after authentication)
+  const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(isAuthenticated, true);
+  const { data: menuItems, error: menuError, isLoading: menuLoading } = useMenu(isAuthenticated ? activeCafeId : null);
+  const { data: extraItems, error: extrasError, isLoading: extrasLoading } = useMenu(isAuthenticated ? activeCafeId : null, "extra");
 
   // Map cafes data to CafeSelector format
   const cafes = useMemo(() => {
@@ -86,15 +88,13 @@ export default function Home() {
     authenticateWithTelegram(initData)
       .then((response) => {
         setIsAuthenticated(true);
+        setUser(response.user);
         console.log("Telegram auth successful");
 
         // Save user object to localStorage
         localStorage.setItem("user", JSON.stringify(response.user));
 
-        // Redirect manager to /manager page
-        if (response.user.role === "manager") {
-          router.push("/manager");
-        }
+        // Manager can stay on main page - no automatic redirect
       })
       .catch(err => {
         console.error("Telegram auth failed:", err);
@@ -266,7 +266,7 @@ export default function Home() {
   }, []);
 
   // Combined error state
-  const error = cafesError || menuError || combosError || extrasError;
+  const error = cafesError || menuError || extrasError;
 
   const noAvailableDates = !selectedDate && !availabilityLoading && availableDays.length > 0;
   const isCheckoutDisabled = totalItems === 0 || !selectedDate || availabilityLoading || noAvailableDates;
@@ -316,6 +316,7 @@ export default function Home() {
       <div className="absolute bg-[#A020F0] blur-[200px] opacity-40 rounded-full w-[120%] h-[50%] top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90" />
       <div className="absolute bg-[#A020F0] blur-[150px] opacity-40 rounded-full w-[80%] h-[60%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
+
       <div className="relative w-full md:w-[90%] min-h-[90vh] mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-none md:rounded-2xl overflow-visible">
         <div className="px-4 pt-6 md:px-6 flex justify-between items-start">
           <div>
@@ -323,12 +324,30 @@ export default function Home() {
             <p className="text-gray-300 text-sm md:text-base">Выберите категорию и блюдо</p>
           </div>
 
-          <button
-            onClick={navigateToFortuneWheel}
-            className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg overflow-hidden"
-          >
-            <img ref={imgRef} src="/image.png" alt="Колесо фортуны" className="w-8 h-8 object-contain" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/profile")}
+              className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg"
+              aria-label="Профиль"
+            >
+              <FaUser className="text-white text-xl" />
+            </button>
+            {user?.role === "manager" && (
+              <button
+                onClick={() => router.push("/manager")}
+                className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg"
+                aria-label="Панель менеджера"
+              >
+                <FaUserShield className="text-white text-xl" />
+              </button>
+            )}
+            <button
+              onClick={navigateToFortuneWheel}
+              className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg overflow-hidden"
+            >
+              <img ref={imgRef} src="/image.png" alt="Колесо фортуны" className="w-8 h-8 object-contain" />
+            </button>
+          </div>
         </div>
 
         {/* Error message */}
