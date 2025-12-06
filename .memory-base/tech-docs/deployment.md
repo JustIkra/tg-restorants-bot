@@ -198,147 +198,1014 @@ docker exec -it lunch-bot-backend python -c "import asyncio; print('Hello from b
 ### Overview
 
 Production deployment for **lunchbot.vibe-labs.ru** uses:
-- Server: `user@172.25.0.200:22`
-- External Nginx Proxy Manager (on separate server) for HTTPS termination
-- Docker Compose for service orchestration
-- Internal nginx for routing between frontend and backend
+- **Server:** `user@172.25.0.200:22` (Docker host)
+- **External Nginx Proxy Manager** (on separate server) for HTTPS termination with Let's Encrypt
+- **Docker Compose** (`docker-compose.prod.yml`) for service orchestration
+- **Internal nginx** container for routing between frontend and backend
 
-### Architecture
+### Production Architecture
 
 ```
-Internet
+Internet (HTTPS)
     ↓
-Nginx Proxy Manager (external server, HTTPS)
+Nginx Proxy Manager (external server)
+  - SSL Termination (Let's Encrypt)
+  - Domain: lunchbot.vibe-labs.ru
+  - Proxy pass to 172.25.0.200:80
     ↓
-172.25.0.200:80 (production server)
+172.25.0.200:80 (Production Docker Host)
     ↓
-docker nginx (lunch-bot-nginx container)
+Nginx Container (lunch-bot-nginx-prod)
+  - Port 80 (only exposed port)
+  - Routes: / → frontend, /api/ → backend
     ↓
-    ┌────────┴─────────┐
-    │                  │
-    ▼                  ▼
-frontend:3000     backend:8000
+    ┌──────────────┴──────────────┐
+    │                             │
+    ▼                             ▼
+Frontend Container           Backend Container
+(lunch-bot-frontend-prod)    (lunch-bot-backend-prod)
+Next.js production build     FastAPI + uvicorn
+Port 3000 (internal)         Port 8000 (internal)
+    │                             │
+    └──────────────┬──────────────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+        ▼                     ▼
+    PostgreSQL             Kafka & Redis
+    (lunch-bot-postgres)   (internal services)
 ```
 
-### Deployment Steps
+### Docker Services in Production
 
-**1. SSH to production server:**
+| Service | Container Name | Description | Restart Policy | Resource Limits |
+|---------|---------------|-------------|----------------|-----------------|
+| **nginx** | `lunch-bot-nginx-prod` | Reverse proxy | `always` | 0.5 CPU, 128M RAM |
+| **postgres** | `lunch-bot-postgres-prod` | PostgreSQL 17 | `always` | 1 CPU, 1G RAM |
+| **kafka** | `lunch-bot-kafka-prod` | Confluent Kafka | `always` | 1 CPU, 1G RAM |
+| **redis** | `lunch-bot-redis-prod` | Redis 7 (AOF) | `always` | 0.5 CPU, 256M RAM |
+| **backend** | `lunch-bot-backend-prod` | FastAPI app | `always` | 2 CPU, 2G RAM |
+| **frontend** | `lunch-bot-frontend-prod` | Next.js app | `always` | 1 CPU, 512M RAM |
+| **telegram-bot** | `lunch-bot-telegram-prod` | Telegram bot (aiogram) | `always` | 0.5 CPU, 256M RAM |
+| **notifications-worker** | `lunch-bot-notifications-prod` | Kafka consumer | `always` | 0.5 CPU, 256M RAM |
+| **recommendations-worker** | `lunch-bot-recommendations-prod` | Kafka consumer | `always` | 0.5 CPU, 256M RAM |
+
+**Key differences from development:**
+- No volume mounts for live code reload
+- Production builds (no `--reload`, no `npm run dev`)
+- All resource limits configured
+- Health checks with longer intervals
+- Uses `.env.production` instead of `backend/.env`
+
+---
+
+## Initial Production Deployment
+
+### Prerequisites
+
+1. **Server access:**
+   ```bash
+   ssh user@172.25.0.200
+   ```
+
+2. **Docker installed:**
+   ```bash
+   docker --version          # Should be 20.10+
+   docker compose version    # Should be 2.0+
+   ```
+
+   If not installed:
+   ```bash
+   # Install Docker
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+
+   # Add user to docker group
+   sudo usermod -aG docker $USER
+   newgrp docker
+
+   # Install Docker Compose plugin
+   sudo apt-get update
+   sudo apt-get install docker-compose-plugin
+   ```
+
+3. **Git installed:**
+   ```bash
+   git --version
+   ```
+
+### Step 1: Clone Repository
 
 ```bash
-ssh user@172.25.0.200
+cd ~
+git clone <your-repository-url> tg_bot
+cd tg_bot
 ```
 
-**2. Clone or update repository:**
+### Step 2: Create `.env.production`
+
+Create production environment file in the project root:
 
 ```bash
-# First time
-git clone <repository-url> /path/to/tg_bot
-cd /path/to/tg_bot
-
-# Updates
-cd /path/to/tg_bot
-git pull origin main
+nano .env.production
 ```
 
-**3. Configure environment variables:**
+**Complete `.env.production` template:**
 
-Edit `backend/.env`:
 ```bash
-# Database (production credentials)
-DATABASE_URL=postgresql+asyncpg://postgres:secure_password@postgres:5432/lunch_bot
+# ========================================
+# DATABASE
+# ========================================
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<GENERATE_STRONG_PASSWORD>
+POSTGRES_DB=lunch_bot
 
-# Telegram
-TELEGRAM_BOT_TOKEN=your_production_bot_token
+DATABASE_URL=postgresql+asyncpg://postgres:<SAME_PASSWORD_HERE>@postgres:5432/lunch_bot
+
+# ========================================
+# KAFKA
+# ========================================
+KAFKA_BROKER_URL=kafka:29092
+
+# ========================================
+# REDIS
+# ========================================
+REDIS_URL=redis://redis:6379
+
+# ========================================
+# GEMINI AI (Recommendations)
+# ========================================
+GEMINI_API_KEYS=<YOUR_GEMINI_API_KEYS_COMMA_SEPARATED>
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MAX_REQUESTS_PER_KEY=195
+
+# ========================================
+# TELEGRAM BOT
+# ========================================
+TELEGRAM_BOT_TOKEN=<YOUR_BOT_TOKEN_FROM_BOTFATHER>
 TELEGRAM_MINI_APP_URL=https://lunchbot.vibe-labs.ru
+BACKEND_API_URL=http://backend:8000/api/v1
 
-# CORS (production domains)
+# ========================================
+# JWT AUTHENTICATION
+# ========================================
+JWT_SECRET_KEY=<GENERATE_STRONG_SECRET>
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_DAYS=7
+
+# ========================================
+# CORS (IMPORTANT!)
+# ========================================
 CORS_ORIGINS=["https://lunchbot.vibe-labs.ru","https://web.telegram.org"]
 
-# JWT (generate secure key)
-JWT_SECRET_KEY=your_very_secure_secret_key_here
-
-# Gemini API
-GEMINI_API_KEYS=key1,key2,key3
-```
-
-Edit `frontend_mini_app/.env.local`:
-```bash
+# ========================================
+# FRONTEND BUILD ARG
+# ========================================
 NEXT_PUBLIC_API_URL=https://lunchbot.vibe-labs.ru/api/v1
 ```
 
-**4. Update docker-compose.yml (if needed):**
-
-Ensure CORS is correctly set:
-```yaml
-backend:
-  environment:
-    CORS_ORIGINS: '["https://lunchbot.vibe-labs.ru","https://web.telegram.org"]'
-```
-
-**5. Build and start services:**
+**Generate secrets:**
 
 ```bash
-docker-compose up --build -d
+# Generate POSTGRES_PASSWORD
+python3 -c "import secrets; print(secrets.token_urlsafe(16))"
+
+# Generate JWT_SECRET_KEY
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-**6. Check service status:**
+**Important notes:**
+- Replace all `<...>` placeholders with actual values
+- `TELEGRAM_BOT_TOKEN`: Get from @BotFather in Telegram
+- `GEMINI_API_KEYS`: Comma-separated list of Google Gemini API keys
+- `CORS_ORIGINS` **MUST** include `https://web.telegram.org` for Mini App to work
+- `NEXT_PUBLIC_API_URL` is used as build argument for frontend
+
+### Step 3: Configure Nginx Proxy Manager
+
+On the **external Nginx Proxy Manager server**, create a new Proxy Host:
+
+**Domain Names:**
+```
+lunchbot.vibe-labs.ru
+```
+
+**Scheme:**
+```
+http
+```
+
+**Forward Hostname/IP:**
+```
+172.25.0.200
+```
+
+**Forward Port:**
+```
+80
+```
+
+**Additional settings:**
+- [✓] Cache Assets
+- [✓] Block Common Exploits
+- [✓] Websockets Support
+
+**SSL Tab:**
+- SSL Certificate: **Request a new SSL Certificate** (Let's Encrypt)
+- [✓] Force SSL
+- [✓] HTTP/2 Support
+- [✓] HSTS Enabled
+- [✓] HSTS Subdomains
+
+**Advanced Tab (Custom Nginx Configuration):**
+```nginx
+# Proxy headers for correct client IP and protocol
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header Host $host;
+
+# Timeouts for long-running requests
+proxy_connect_timeout 60s;
+proxy_send_timeout 60s;
+proxy_read_timeout 60s;
+```
+
+### Step 4: Launch Production Stack
 
 ```bash
-docker-compose ps
+cd ~/tg_bot
+
+# Pull latest images
+docker compose -f docker-compose.prod.yml pull
+
+# Build and start all services
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-All services should show "Up" status.
+**This will:**
+1. Build backend image from `backend/Dockerfile`
+2. Build frontend image from `frontend_mini_app/Dockerfile` with production build
+3. Pull postgres, redis, kafka, nginx images
+4. Create Docker volumes for persistent data
+5. Create `lunch-bot-network` bridge network
+6. Start all 9 services with health checks
 
-**7. Verify health check:**
+**Expected output:**
+```
+[+] Running 10/10
+ ✔ Network lunch-bot-network               Created
+ ✔ Volume "lunch-bot_postgres_data"        Created
+ ✔ Volume "lunch-bot_redis_data"           Created
+ ✔ Volume "lunch-bot_kafka_data"           Created
+ ✔ Volume "lunch-bot_nginx_logs"           Created
+ ✔ Container lunch-bot-postgres-prod       Started
+ ✔ Container lunch-bot-redis-prod          Started
+ ✔ Container lunch-bot-kafka-prod          Started
+ ✔ Container lunch-bot-backend-prod        Started
+ ✔ Container lunch-bot-frontend-prod       Started
+ ✔ Container lunch-bot-nginx-prod          Started
+ ✔ Container lunch-bot-telegram-prod       Started
+ ✔ Container lunch-bot-notifications-prod  Started
+ ✔ Container lunch-bot-recommendations-prod Started
+```
 
+### Step 5: Check Services Status
+
+```bash
+# Check all containers are running
+docker compose -f docker-compose.prod.yml ps
+
+# Expected: All services show "Up" or "Up (healthy)"
+# NAME                                      STATUS
+# lunch-bot-backend-prod                    Up (healthy)
+# lunch-bot-frontend-prod                   Up (healthy)
+# lunch-bot-kafka-prod                      Up (healthy)
+# lunch-bot-nginx-prod                      Up (healthy)
+# lunch-bot-notifications-prod              Up
+# lunch-bot-postgres-prod                   Up (healthy)
+# lunch-bot-recommendations-prod            Up
+# lunch-bot-redis-prod                      Up (healthy)
+# lunch-bot-telegram-prod                   Up
+```
+
+**If any service is not "Up":**
+```bash
+# Check logs for the failed service
+docker compose -f docker-compose.prod.yml logs <service-name>
+
+# Example:
+docker compose -f docker-compose.prod.yml logs backend
+```
+
+### Step 6: Apply Database Migrations
+
+```bash
+# Enter backend container
+docker exec -it lunch-bot-backend-prod bash
+
+# Apply Alembic migrations
+alembic upgrade head
+
+# Exit container
+exit
+```
+
+**Expected output:**
+```
+INFO  [alembic.runtime.migration] Running upgrade -> rev1, initial schema
+INFO  [alembic.runtime.migration] Running upgrade rev1 -> rev2, add users table
+...
+```
+
+### Step 7: Verify Deployment
+
+**Health check from server:**
 ```bash
 curl http://localhost/health
+# Expected: HTTP 200 "healthy"
 ```
 
-Should return: `{"status":"ok"}`
-
-### Nginx Proxy Manager Configuration
-
-Configure external Nginx Proxy Manager to forward traffic to production server:
-
-**Proxy Host settings:**
-- Domain Names: `lunchbot.vibe-labs.ru`
-- Scheme: `http`
-- Forward Hostname/IP: `172.25.0.200`
-- Forward Port: `80`
-- Cache Assets: Yes
-- Block Common Exploits: Yes
-- Websockets Support: Yes
-
-**SSL settings:**
-- SSL Certificate: Let's Encrypt or custom
-- Force SSL: Yes
-- HTTP/2 Support: Yes
-- HSTS Enabled: Yes
-
-### Post-Deployment Verification
-
-**1. Check frontend:**
+**Health check from external domain:**
 ```bash
-curl https://lunchbot.vibe-labs.ru
+curl https://lunchbot.vibe-labs.ru/health
+# Expected: HTTP 200 "healthy"
 ```
 
-**2. Check backend API:**
+**API documentation:**
+```
+Open in browser: https://lunchbot.vibe-labs.ru/docs
+# Should show Swagger UI
+```
+
+**Frontend (Mini App):**
+```
+Open in browser: https://lunchbot.vibe-labs.ru/
+# Should show the Telegram Mini App UI (or fallback if not in Telegram)
+```
+
+### Step 8: Create First Manager User
+
 ```bash
-curl https://lunchbot.vibe-labs.ru/api/v1/health
+# Enter backend container
+docker exec -it lunch-bot-backend-prod bash
+
+# Run Python shell
+python
+
+# Create manager account
+from src.database.session import get_session
+from src.models import User
+import asyncio
+
+async def create_manager():
+    async with get_session() as session:
+        manager = User(
+            tgid=123456789,  # Replace with your Telegram ID
+            name="Admin",
+            office="Main Office",
+            role="manager",
+            is_active=True
+        )
+        session.add(manager)
+        await session.commit()
+        print(f"Manager created: {manager.name} (tgid={manager.tgid})")
+
+asyncio.run(create_manager())
+exit()
+
+# Exit container
+exit
 ```
 
-**3. Check API docs:**
+**To find your Telegram ID:**
+- Send `/start` to @userinfobot in Telegram
+- It will reply with your ID
+
+### Step 9: Test Telegram Integration
+
+1. Open your bot in Telegram (mobile or desktop app)
+2. Send `/start` command
+3. Click "Заказать обед" button or use Menu Button
+4. Mini App should open with `https://lunchbot.vibe-labs.ru`
+5. Authentication should complete automatically
+6. You should see the cafe list
+
+**If Mini App doesn't open:**
+- Check `TELEGRAM_BOT_TOKEN` is correct in `.env.production`
+- Check `TELEGRAM_MINI_APP_URL=https://lunchbot.vibe-labs.ru` in `.env.production`
+- Restart telegram-bot: `docker compose -f docker-compose.prod.yml restart telegram-bot`
+- Check logs: `docker compose -f docker-compose.prod.yml logs telegram-bot`
+
+---
+
+## Updating Production (Re-deployment)
+
+### Standard Update (with downtime)
+
 ```bash
-curl https://lunchbot.vibe-labs.ru/docs
+cd ~/tg_bot
+
+# Pull latest code
+git pull origin main
+
+# Stop services
+docker compose -f docker-compose.prod.yml down
+
+# Rebuild and start
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Apply new migrations (if any)
+docker exec -it lunch-bot-backend-prod alembic upgrade head
 ```
 
-**4. Test Telegram Mini App:**
-- Open bot in Telegram
-- Send `/order` or click Menu Button
-- Mini App should open and load successfully
-- Check authentication works
-- Test creating an order
+**Downtime:** ~2-5 minutes
+
+### Zero-Downtime Update (Rolling Update)
+
+Update services one by one without stopping the entire stack:
+
+```bash
+cd ~/tg_bot
+git pull origin main
+
+# Update backend only
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate backend
+
+# Wait for backend to be healthy
+docker compose -f docker-compose.prod.yml ps backend
+
+# Update frontend only
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate frontend
+
+# Update workers
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate telegram-bot
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate notifications-worker
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate recommendations-worker
+
+# Apply migrations
+docker exec -it lunch-bot-backend-prod alembic upgrade head
+```
+
+**Downtime:** ~10-30 seconds per service
+
+### Update Only Specific Service
+
+```bash
+# Update only backend
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate backend
+
+# Update only frontend
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate frontend
+
+# Update only telegram bot
+docker compose -f docker-compose.prod.yml up -d --build --no-deps --force-recreate telegram-bot
+```
+
+### Update Environment Variables
+
+```bash
+# Edit .env.production
+nano .env.production
+
+# Restart affected services
+docker compose -f docker-compose.prod.yml restart backend telegram-bot
+
+# Or restart all services (faster than rebuild)
+docker compose -f docker-compose.prod.yml restart
+```
+
+---
+
+## Monitoring & Logs
+
+### View Logs
+
+**All services (realtime):**
+```bash
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+**Specific service:**
+```bash
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f frontend
+docker compose -f docker-compose.prod.yml logs -f telegram-bot
+docker compose -f docker-compose.prod.yml logs -f notifications-worker
+docker compose -f docker-compose.prod.yml logs -f recommendations-worker
+```
+
+**Last N lines:**
+```bash
+# Last 100 lines
+docker compose -f docker-compose.prod.yml logs --tail=100 backend
+
+# Last 50 lines from all services
+docker compose -f docker-compose.prod.yml logs --tail=50
+```
+
+**Nginx access/error logs:**
+```bash
+# Access log
+docker exec lunch-bot-nginx-prod cat /var/log/nginx/access.log
+
+# Error log
+docker exec lunch-bot-nginx-prod cat /var/log/nginx/error.log
+
+# Tail logs
+docker exec lunch-bot-nginx-prod tail -f /var/log/nginx/access.log
+```
+
+### Check Service Health
+
+**Container status:**
+```bash
+docker compose -f docker-compose.prod.yml ps
+```
+
+**Health check status:**
+```bash
+# Check all health checks
+docker ps --format "table {{.Names}}\t{{.Status}}"
+
+# Check specific service health
+docker inspect --format='{{.State.Health.Status}}' lunch-bot-backend-prod
+docker inspect --format='{{.State.Health.Status}}' lunch-bot-frontend-prod
+docker inspect --format='{{.State.Health.Status}}' lunch-bot-postgres-prod
+```
+
+**Resource usage:**
+```bash
+# All containers
+docker stats
+
+# Specific service
+docker stats lunch-bot-backend-prod
+```
+
+---
+
+## Backup & Restore
+
+### PostgreSQL Backup
+
+**Manual backup:**
+```bash
+# Create backup file
+docker exec lunch-bot-postgres-prod pg_dump -U postgres lunch_bot > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Verify backup file
+ls -lh backup_*.sql
+```
+
+**Backup with custom format (smaller, faster restore):**
+```bash
+docker exec lunch-bot-postgres-prod pg_dump -U postgres -Fc lunch_bot > backup_$(date +%Y%m%d_%H%M%S).dump
+```
+
+**Full backup (including roles):**
+```bash
+docker exec lunch-bot-postgres-prod pg_dumpall -U postgres > backup_full_$(date +%Y%m%d_%H%M%S).sql
+```
+
+### PostgreSQL Restore
+
+**Restore from SQL backup:**
+```bash
+cat backup_20251206_120000.sql | docker exec -i lunch-bot-postgres-prod psql -U postgres lunch_bot
+```
+
+**Restore from custom format:**
+```bash
+cat backup_20251206_120000.dump | docker exec -i lunch-bot-postgres-prod pg_restore -U postgres -d lunch_bot
+```
+
+**Restore full backup:**
+```bash
+cat backup_full_20251206_120000.sql | docker exec -i lunch-bot-postgres-prod psql -U postgres
+```
+
+### Automated Daily Backups
+
+Create backup script `/home/user/backup_db.sh`:
+
+```bash
+#!/bin/bash
+
+BACKUP_DIR="/home/user/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+RETENTION_DAYS=7
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Create database backup
+docker exec lunch-bot-postgres-prod pg_dump -U postgres -Fc lunch_bot > $BACKUP_DIR/lunch_bot_$DATE.dump
+
+# Compress backup
+gzip $BACKUP_DIR/lunch_bot_$DATE.dump
+
+# Delete backups older than retention period
+find $BACKUP_DIR -name "lunch_bot_*.dump.gz" -mtime +$RETENTION_DAYS -delete
+
+echo "Backup completed: lunch_bot_$DATE.dump.gz"
+echo "Backups older than $RETENTION_DAYS days deleted"
+```
+
+Make executable:
+```bash
+chmod +x /home/user/backup_db.sh
+```
+
+**Add to crontab (daily at 2 AM):**
+```bash
+crontab -e
+
+# Add this line:
+0 2 * * * /home/user/backup_db.sh >> /home/user/backups/backup.log 2>&1
+```
+
+### Backup Docker Volumes
+
+```bash
+# Backup postgres volume
+docker run --rm \
+  -v lunch-bot_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/postgres_backup_$(date +%Y%m%d).tar.gz /data
+
+# Backup redis volume
+docker run --rm \
+  -v lunch-bot_redis_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/redis_backup_$(date +%Y%m%d).tar.gz /data
+```
+
+---
+
+## Troubleshooting Production
+
+### Container Won't Start
+
+```bash
+# Check logs
+docker compose -f docker-compose.prod.yml logs <service-name>
+
+# Check dependencies (health checks)
+docker compose -f docker-compose.prod.yml ps
+
+# Restart specific service
+docker compose -f docker-compose.prod.yml restart <service-name>
+
+# Force recreate
+docker compose -f docker-compose.prod.yml up -d --force-recreate <service-name>
+```
+
+### Database Connection Issues
+
+```bash
+# Test PostgreSQL is ready
+docker exec lunch-bot-postgres-prod pg_isready -U postgres
+
+# Test connection from backend
+docker exec lunch-bot-backend-prod python -c "
+from sqlalchemy import create_engine
+from src.config import settings
+engine = create_engine(settings.DATABASE_URL.replace('asyncpg', 'psycopg2'))
+try:
+    conn = engine.connect()
+    print('✓ Database connection OK')
+    conn.close()
+except Exception as e:
+    print(f'✗ Database connection FAILED: {e}')
+"
+```
+
+### Kafka Issues
+
+```bash
+# Check Kafka broker status
+docker exec lunch-bot-kafka-prod kafka-broker-api-versions --bootstrap-server localhost:29092
+
+# List topics
+docker exec lunch-bot-kafka-prod kafka-topics --bootstrap-server localhost:29092 --list
+
+# Check consumer groups
+docker exec lunch-bot-kafka-prod kafka-consumer-groups --bootstrap-server localhost:29092 --list
+
+# Describe consumer group
+docker exec lunch-bot-kafka-prod kafka-consumer-groups \
+  --bootstrap-server localhost:29092 \
+  --group notifications-worker \
+  --describe
+```
+
+### Out of Disk Space
+
+```bash
+# Check disk usage
+df -h
+
+# Check Docker disk usage
+docker system df
+
+# Clean up unused images
+docker image prune -a
+
+# Clean up stopped containers
+docker container prune
+
+# Clean up unused volumes (CAREFUL!)
+docker volume prune
+
+# Full cleanup (CAREFUL! Will remove all unused resources)
+docker system prune -a --volumes
+```
+
+### Frontend Not Loading
+
+```bash
+# Check frontend logs
+docker compose -f docker-compose.prod.yml logs frontend
+
+# Check if frontend is running
+docker compose -f docker-compose.prod.yml ps frontend
+
+# Verify environment variable
+docker exec lunch-bot-frontend-prod env | grep NEXT_PUBLIC_API_URL
+
+# If wrong, rebuild with correct value
+docker compose -f docker-compose.prod.yml up -d --build --force-recreate frontend
+```
+
+### Nginx 502 Bad Gateway
+
+```bash
+# Check nginx config is valid
+docker exec lunch-bot-nginx-prod nginx -t
+
+# Check nginx logs
+docker exec lunch-bot-nginx-prod cat /var/log/nginx/error.log | tail -50
+
+# Check upstream services are running
+docker compose -f docker-compose.prod.yml ps backend frontend
+
+# Restart nginx
+docker compose -f docker-compose.prod.yml restart nginx
+```
+
+### CORS Errors in Production
+
+**Symptoms:**
+- Mini App opens but shows blank screen
+- Browser console shows CORS errors
+
+**Solution:**
+```bash
+# Check CORS_ORIGINS in .env.production
+cat .env.production | grep CORS_ORIGINS
+
+# Should be:
+# CORS_ORIGINS=["https://lunchbot.vibe-labs.ru","https://web.telegram.org"]
+
+# If wrong, fix it:
+nano .env.production
+
+# Restart backend
+docker compose -f docker-compose.prod.yml restart backend
+
+# Verify CORS header
+curl -H "Origin: https://web.telegram.org" -I https://lunchbot.vibe-labs.ru/api/v1/health
+# Should include: Access-Control-Allow-Origin: https://web.telegram.org
+```
+
+---
+
+## Security Best Practices
+
+### 1. Strong Passwords
+
+```bash
+# Generate strong password for PostgreSQL
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"
+
+# Generate JWT secret
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+### 2. Firewall Configuration
+
+```bash
+# Enable UFW firewall
+sudo ufw enable
+
+# Allow SSH
+sudo ufw allow 22/tcp
+
+# Allow HTTP (for Nginx Proxy Manager to connect)
+sudo ufw allow 80/tcp
+
+# Optional: Allow HTTPS if running SSL on this server
+sudo ufw allow 443/tcp
+
+# Check status
+sudo ufw status
+```
+
+### 3. SSH Security
+
+```bash
+# Disable password authentication (use SSH keys only)
+sudo nano /etc/ssh/sshd_config
+
+# Set:
+# PasswordAuthentication no
+# PubkeyAuthentication yes
+
+# Restart SSH
+sudo systemctl restart sshd
+```
+
+### 4. Keep Docker Images Updated
+
+```bash
+# Pull latest images
+docker compose -f docker-compose.prod.yml pull
+
+# Rebuild and restart
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### 5. Monitor Logs Regularly
+
+```bash
+# Check for errors in logs
+docker compose -f docker-compose.prod.yml logs --tail=100 | grep -i error
+
+# Check for failed authentication attempts
+docker compose -f docker-compose.prod.yml logs backend | grep -i "auth failed"
+```
+
+### 6. Secrets Management
+
+**Never commit `.env.production` to Git!**
+
+`.gitignore` should include:
+```
+.env.production
+*.env.prod
+```
+
+Store production secrets in:
+- Password manager (1Password, Bitwarden, etc.)
+- Secrets management service (AWS Secrets Manager, HashiCorp Vault)
+- Server-side only (never in Git)
+
+---
+
+## Performance Optimization
+
+### Database Tuning
+
+Add to `.env.production`:
+```bash
+# PostgreSQL performance tuning
+POSTGRES_SHARED_BUFFERS=256MB
+POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
+POSTGRES_MAINTENANCE_WORK_MEM=64MB
+POSTGRES_MAX_CONNECTIONS=100
+```
+
+### Nginx Caching (Optional)
+
+Create `nginx/nginx.prod.conf` with caching:
+```nginx
+# Add to http block
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=api_cache:10m max_size=100m inactive=60m;
+
+# Add to location /api/
+location /api/ {
+    proxy_cache api_cache;
+    proxy_cache_valid 200 5m;
+    proxy_cache_use_stale error timeout http_500 http_502 http_503;
+    # ... rest of proxy config
+}
+```
+
+### Resource Monitoring
+
+```bash
+# Monitor container resources
+docker stats
+
+# Check resource limits
+docker inspect lunch-bot-backend-prod | grep -A 10 Resources
+```
+
+---
+
+## CI/CD Integration (Optional)
+
+### GitHub Actions Example
+
+Create `.github/workflows/deploy-production.yml`:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@master
+        with:
+          host: 172.25.0.200
+          username: user
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/tg_bot
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker exec lunch-bot-backend-prod alembic upgrade head
+```
+
+Add SSH private key to GitHub Secrets:
+- Repository → Settings → Secrets → New repository secret
+- Name: `SSH_PRIVATE_KEY`
+- Value: Contents of your SSH private key
+
+---
+
+## Quick Reference
+
+### Essential Commands
+
+```bash
+# Start production
+docker compose -f docker-compose.prod.yml up -d
+
+# Stop production
+docker compose -f docker-compose.prod.yml down
+
+# Restart services
+docker compose -f docker-compose.prod.yml restart
+
+# View logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Check status
+docker compose -f docker-compose.prod.yml ps
+
+# Update from Git
+git pull && docker compose -f docker-compose.prod.yml up -d --build
+
+# Backup database
+docker exec lunch-bot-postgres-prod pg_dump -U postgres lunch_bot > backup.sql
+
+# Restore database
+cat backup.sql | docker exec -i lunch-bot-postgres-prod psql -U postgres lunch_bot
+
+# Apply migrations
+docker exec -it lunch-bot-backend-prod alembic upgrade head
+
+# Clean up Docker
+docker system prune -a
+```
+
+### Important URLs
+
+- **Frontend:** https://lunchbot.vibe-labs.ru/
+- **API Docs:** https://lunchbot.vibe-labs.ru/docs
+- **Health Check:** https://lunchbot.vibe-labs.ru/health
+
+### Log Locations
+
+- Nginx logs: `docker exec lunch-bot-nginx-prod cat /var/log/nginx/access.log`
+- Backend logs: `docker compose -f docker-compose.prod.yml logs backend`
+- Frontend logs: `docker compose -f docker-compose.prod.yml logs frontend`
+- All logs: `docker compose -f docker-compose.prod.yml logs`
+
+---
+
+## Post-Deployment Verification Checklist
+
+- [ ] All containers show "Up" status: `docker compose -f docker-compose.prod.yml ps`
+- [ ] Health check passes: `curl https://lunchbot.vibe-labs.ru/health`
+- [ ] API docs accessible: https://lunchbot.vibe-labs.ru/docs
+- [ ] Frontend loads: https://lunchbot.vibe-labs.ru/
+- [ ] Telegram Mini App opens via Menu Button
+- [ ] Authentication works in Mini App
+- [ ] Can create test order
+- [ ] Database migrations applied: `docker exec lunch-bot-backend-prod alembic current`
+- [ ] Backups configured and tested
+- [ ] Firewall enabled: `sudo ufw status`
+- [ ] CORS includes `https://web.telegram.org`
+- [ ] `.env.production` not committed to Git
 
 ---
 

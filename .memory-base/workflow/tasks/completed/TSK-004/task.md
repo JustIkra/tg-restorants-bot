@@ -2,7 +2,7 @@
 id: TSK-004
 title: "Полная интеграция, E2E тестирование и деплой системы"
 pipeline: feature
-status: pending
+status: completed
 created_at: 2025-12-06T11:30:00
 related_files:
   - backend/

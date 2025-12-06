@@ -2,7 +2,7 @@
 id: TSK-005
 title: "Интеграция фронтенда как Telegram Mini App"
 pipeline: feature
-status: pending
+status: completed
 created_at: 2025-12-06T12:00:00
 related_files:
   - backend/src/telegram/bot.py
