@@ -7,10 +7,11 @@
 ## Technical Documentation
 
 ### Backend
-- [Tech Stack](tech-docs/stack.md) - Python 3.13, PostgreSQL 17, Kafka, Redis, Gemini AI
+- [Tech Stack](tech-docs/stack.md) - Python 3.13, PostgreSQL 17, Kafka, Redis, Nginx, Gemini AI
 - [API Endpoints](tech-docs/api.md) - REST API for users, managers, cafe links, recommendations
 - [Roles](tech-docs/roles.md) - user, manager
 - [Architecture](tech-docs/image.png) - system diagram
+- [Deployment](tech-docs/deployment.md) - Docker setup, Nginx reverse proxy, debugging, production deployment
 - [Kafka Architecture](tech-docs/kafka-architecture.md) - Event-driven notifications and batch jobs
 - [Gemini Integration](tech-docs/gemini-integration.md) - AI recommendations with API key pool
 

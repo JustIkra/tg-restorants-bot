@@ -10,7 +10,7 @@ import pytest
 
 from src.auth.telegram import TelegramAuthError, validate_telegram_init_data
 
-BOT_TOKEN = "test_bot_token_123456:ABCdefGHIjklMNOpqrsTUVwxyz"
+BOT_TOKEN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz1234567890"
 
 
 def generate_valid_init_data(user_data: dict, bot_token: str) -> str:

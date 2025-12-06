@@ -195,25 +195,25 @@ Supervisor показывает человеку
 ## Что реализовать
 
 ### Файлы документации
-- [ ] `.memory-base/tech-docs/rules/code-style.md`
-- [ ] `.memory-base/tech-docs/rules/git-workflow.md`
-- [ ] `.memory-base/tech-docs/rules/testing.md`
+- [x] `.memory-base/tech-docs/rules/code-style.md`
+- [x] `.memory-base/tech-docs/rules/git-workflow.md`
+- [x] `.memory-base/tech-docs/rules/testing.md`
 
 ### Workflow система
-- [ ] `.memory-base/workflow/config.yaml`
-- [ ] `.memory-base/workflow/prompts/base.md`
-- [ ] `.memory-base/workflow/prompts/roles/architect.md`
-- [ ] `.memory-base/workflow/prompts/roles/coder.md`
-- [ ] `.memory-base/workflow/prompts/roles/reviewer.md`
-- [ ] `.memory-base/workflow/prompts/roles/tester.md`
-- [ ] `.memory-base/workflow/prompts/roles/debugger.md`
-- [ ] `.memory-base/workflow/prompts/roles/docwriter.md`
-- [ ] `.memory-base/workflow/tasks/active/.gitkeep`
-- [ ] `.memory-base/workflow/tasks/completed/.gitkeep`
-- [ ] `.memory-base/workflow/tasks/failed/.gitkeep`
+- [x] `.memory-base/workflow/config.yaml`
+- [x] `.memory-base/workflow/prompts/base.md`
+- [x] `.memory-base/workflow/prompts/roles/architect.md`
+- [x] `.memory-base/workflow/prompts/roles/coder.md`
+- [x] `.memory-base/workflow/prompts/roles/reviewer.md`
+- [x] `.memory-base/workflow/prompts/roles/tester.md`
+- [x] `.memory-base/workflow/prompts/roles/debugger.md`
+- [x] `.memory-base/workflow/prompts/roles/docwriter.md`
+- [x] `.memory-base/workflow/tasks/active/.gitkeep`
+- [x] `.memory-base/workflow/tasks/completed/.gitkeep`
+- [x] `.memory-base/workflow/tasks/failed/.gitkeep`
 
 ### Корневой файл
-- [ ] `CLAUDE.md`
+- [x] `CLAUDE.md`
 
 ## Технологии
 

@@ -576,19 +576,33 @@ useEffect(() => {
 }, []);
 ```
 
-### Order Submission
+### Order Date Selection + Submission
+
+- Доступность дат берём из `/orders/availability/week?cafe_id={id}` или точечного `/orders/availability/{date}?cafe_id={id}`.
+- Логика выбора: если сегодня `can_order === true` — ставим сегодняшнюю дату; иначе выбираем ближайший день из ответа `week`.
+- Перед отправкой валидируем, что `selectedDate` не `null`; если доступных дат нет — блокируем кнопку с текстом/ошибкой, показываем причину из availability.
 
 ```typescript
-const handleCheckout = async () => {
-  if (!isOrderComplete || !selectedCafe || !selectedCombo) return;
+const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const orderDate = tomorrow.toISOString().split("T")[0]; // YYYY-MM-DD
+// Получаем доступные даты после выбора кафе
+useEffect(() => {
+  if (!selectedCafe) return;
+  fetch(`/api/v1/orders/availability/week?cafe_id=${selectedCafe.id}`)
+    .then(res => res.json())
+    .then(data => {
+      const nextAvailable = data.days.find((d: any) => d.can_order);
+      setSelectedDate(nextAvailable?.date ?? null);
+    })
+    .catch(() => setSelectedDate(null));
+}, [selectedCafe]);
+
+const handleCheckout = async () => {
+  if (!isOrderComplete || !selectedCafe || !selectedCombo || !selectedDate) return;
 
   const orderData: CreateOrderRequest = {
     cafe_id: selectedCafe.id,
-    order_date: orderDate,
+    order_date: selectedDate, // ISO YYYY-MM-DD из доступности
     combo_id: selectedCombo.id,
     combo_items: Object.entries(comboItems).map(([category, itemId]) => ({
       category,
@@ -873,4 +887,4 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 - **Token Persistence:** JWT token stored in localStorage
 - **Error Handling:** All errors displayed to user via alerts
 - **Validation:** Order submission disabled until all combo categories filled
-- **Tomorrow's Orders:** Orders always created for next day (tomorrow)
+- **Order date:** выбирается по доступности (сначала сегодня, иначе ближайший доступный день), не жёстко `today + 1`.

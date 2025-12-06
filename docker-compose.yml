@@ -1,4 +1,25 @@
 services:
+  # Reverse Proxy
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lunch-bot-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - lunch-bot-network
+
   # Database
   postgres:
     image: postgres:17-alpine
@@ -7,8 +28,6 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: lunch_bot
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,21 +42,19 @@ services:
   kafka:
     image: confluentinc/cp-kafka:latest
     container_name: lunch-bot-kafka
-    ports:
-      - "9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -48,8 +65,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: lunch-bot-redis
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -75,15 +90,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
       KAFKA_BROKER_URL: kafka:29092
       REDIS_URL: redis://redis:6379
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_DAYS: 7
-      CORS_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
+      CORS_ORIGINS: '["http://localhost","https://lunchbot.vibe-labs.ru","https://web.telegram.org"]'
     volumes:
       - ./backend:/app
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
@@ -96,14 +109,12 @@ services:
       context: ./frontend_mini_app
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+        NEXT_PUBLIC_API_URL: http://localhost/api/v1
     container_name: lunch-bot-frontend
     depends_on:
       - backend
-    ports:
-      - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
     command: npm run dev
     volumes:
       - ./frontend_mini_app:/app
@@ -183,6 +194,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  nginx_logs:
 
 networks:
   lunch-bot-network:

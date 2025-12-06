@@ -8,6 +8,10 @@ class Settings(BaseSettings):
 
     # Telegram
     TELEGRAM_BOT_TOKEN: str
+    TELEGRAM_MINI_APP_URL: str = "http://localhost"
+
+    # Backend API (for internal communication)
+    BACKEND_API_URL: str = "http://backend:8000/api/v1"
 
     # JWT
     JWT_SECRET_KEY: str

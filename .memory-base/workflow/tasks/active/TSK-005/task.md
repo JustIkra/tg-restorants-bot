@@ -63,6 +63,11 @@ impact:
 - ❌ Webhook для production (сейчас polling)
 - ❌ CORS может требовать настройки для Telegram домена
 
+## Недавние изменения (2025-12-06)
+
+- Frontend `frontend_mini_app/src/app/page.tsx`: добавлена загрузка доступных дат через `/orders/availability/week?cafe_id=...`, выбор сегодняшней даты если доступна либо ближайшей доступной; при отсутствии доступных дат Checkout блокируется и показывается причина.
+- Документация: обновлён `tech-docs/frontend-components.md` и `tech-docs/issues/order-date-mismatch.md` — убрана жёсткая привязка к «завтра», описана логика выбора даты по доступности и блокировка кнопки при отсутствии дат.
+
 ## Acceptance Criteria
 
 ### 1. Настройка Telegram Bot для Mini App
@@ -113,25 +118,25 @@ impact:
   - Обновить `NEXT_PUBLIC_API_URL` для ngrok URL backend
 
 - [ ] **Production:**
-  - Deploy фронтенд на:
-    - Vercel (рекомендуется для Next.js)
-    - Netlify
-    - Railway
-    - AWS S3 + CloudFront
-    - Собственный VPS с Nginx + SSL (Let's Encrypt)
-  - Получить HTTPS домен
-  - Настроить CORS в backend для production домена
+  - Deploy на сервер: `user@172.25.0.200:22`
+  - Домен: `lunchbot.vibe-labs.ru`
+  - HTTPS через внешний Nginx Proxy Manager (на отдельном сервере)
+  - Архитектура:
+    ```
+    Internet → Nginx Proxy Manager → 172.25.0.200:80 → docker nginx → frontend/backend
+    ```
+  - Настроить CORS в backend для `https://lunchbot.vibe-labs.ru`
 
 #### Environment Variables
 - [ ] Добавить в `frontend_mini_app/.env.local`:
   ```bash
-  NEXT_PUBLIC_API_URL=https://api.your-domain.com/api/v1
+  NEXT_PUBLIC_API_URL=https://lunchbot.vibe-labs.ru/api/v1
   ```
 - [ ] Добавить в `backend/.env`:
   ```bash
   TELEGRAM_BOT_TOKEN=your_bot_token
-  TELEGRAM_MINI_APP_URL=https://miniapp.your-domain.com
-  CORS_ORIGINS=["https://miniapp.your-domain.com","https://web.telegram.org"]
+  TELEGRAM_MINI_APP_URL=https://lunchbot.vibe-labs.ru
+  CORS_ORIGINS=["https://lunchbot.vibe-labs.ru","https://web.telegram.org"]
   ```
 
 ### 3. Telegram WebApp SDK Integration Testing
@@ -193,7 +198,7 @@ impact:
 - [ ] Обновить CORS для Telegram домена:
   ```python
   CORS_ORIGINS = [
-      "https://miniapp.your-domain.com",
+      "https://lunchbot.vibe-labs.ru",
       "https://web.telegram.org",  # Telegram WebApp iframe
       "http://localhost:3000",  # Development
   ]
@@ -269,7 +274,7 @@ impact:
 │                                             │
 │  ┌───────────────────────────────────────┐  │
 │  │    Mini App (Next.js Frontend)        │  │
-│  │    https://miniapp.your-domain.com    │  │
+│  │    https://lunchbot.vibe-labs.ru      │  │
 │  │                                       │  │
 │  │  - Telegram WebApp SDK                │  │
 │  │  - initData для авторизации           │  │
@@ -281,7 +286,7 @@ impact:
                   ▼
 ┌─────────────────────────────────────────────┐
 │          Backend API (FastAPI)              │
-│      https://api.your-domain.com            │
+│      https://lunchbot.vibe-labs.ru/api      │
 │                                             │
 │  POST /auth/telegram                        │
 │    - Validate initData                      │

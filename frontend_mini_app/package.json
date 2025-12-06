@@ -12,10 +12,12 @@
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@twa-dev/sdk": "^8.0.2",
     "next": "16.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "swr": "^2.3.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",

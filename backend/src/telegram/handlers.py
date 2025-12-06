@@ -1,4 +1,4 @@
-"""Telegram bot command handlers for cafe linking."""
+"""Telegram bot command handlers for cafe linking and Mini App."""
 
 import logging
 import re
@@ -6,15 +6,15 @@ import re
 import httpx
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from ..config import settings
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Base URL for backend API
-API_BASE_URL = "http://localhost:8000/api/v1"
+# Base URL for backend API (use Docker hostname for inter-container communication)
+API_BASE_URL = settings.BACKEND_API_URL
 
 
 @router.message(CommandStart())
@@ -22,13 +22,38 @@ async def cmd_start(message: Message):
     """
     Handle /start command.
 
-    Sends welcome message with instructions on how to link cafe.
+    Sends welcome message with Mini App button and instructions.
     """
+    webapp = WebAppInfo(url=settings.TELEGRAM_MINI_APP_URL)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🍽 Заказать обед", web_app=webapp)],
+        ]
+    )
     await message.answer(
-        "👋 Привет! Это бот для уведомлений о заказах.\n\n"
-        "Для привязки кафе к этому чату используйте команду:\n"
-        "/link <cafe_id>\n\n"
-        "Например: /link 1"
+        "👋 Привет! Это бот для заказа обедов.\n\n"
+        "Нажмите кнопку ниже, чтобы открыть меню и сделать заказ.\n\n"
+        "📌 Для менеджеров кафе: /link <cafe_id> - привязать кафе к чату",
+        reply_markup=keyboard,
+    )
+
+
+@router.message(Command("order"))
+async def cmd_order(message: Message):
+    """
+    Handle /order command - launch Mini App for ordering.
+
+    Sends inline keyboard with web_app button to open the Mini App.
+    """
+    webapp = WebAppInfo(url=settings.TELEGRAM_MINI_APP_URL)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🍽 Заказать обед", web_app=webapp)],
+        ]
+    )
+    await message.answer(
+        "Откройте приложение для заказа обеда:",
+        reply_markup=keyboard,
     )
 
 
@@ -150,9 +175,9 @@ async def cmd_help(message: Message):
     await message.answer(
         "📖 Доступные команды:\n\n"
         "/start - Начать работу с ботом\n"
-        "/link <cafe_id> - Привязать кафе к этому чату\n"
+        "/order - Открыть меню для заказа обеда\n"
+        "/link <cafe_id> - Привязать кафе к чату (для менеджеров)\n"
         "/status - Проверить статус привязки\n"
         "/help - Показать эту справку\n\n"
-        "Пример использования:\n"
-        "/link 1 - Привязать кафе с ID 1"
+        "💡 Для заказа обеда нажмите кнопку Menu или используйте /order"
     )

@@ -3,7 +3,8 @@
 import os
 
 # Set environment variables BEFORE importing anything from src
-os.environ["TELEGRAM_BOT_TOKEN"] = "test_bot_token_123456:ABCdefGHIjklMNOpqrsTUVwxyz"
+# Token format: <bot_id>:<token> (bot_id must be numeric)
+os.environ["TELEGRAM_BOT_TOKEN"] = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz1234567890"
 os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_at_least_32_chars_long_for_security"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 os.environ["KAFKA_BROKER_URL"] = "localhost:9092"

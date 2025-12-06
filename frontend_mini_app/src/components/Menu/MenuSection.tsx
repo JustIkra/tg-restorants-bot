@@ -1,6 +1,6 @@
 import React from "react";
 
-type Dish = { id: number; name: string; description: string; price: number; categoryId: number };
+type Dish = { id: number; name: string; description: string; price: number; categoryId: string };
 
 interface MenuSectionProps {
   dishes: Dish[];

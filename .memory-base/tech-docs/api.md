@@ -305,6 +305,11 @@ GET /orders/availability/week
     }]
   }
 
+### Клиентская логика выбора даты
+- Клиенту нужно проверять доступность перед созданием заказа: сначала запросить `/orders/availability/{today}?cafe_id={id}` или сразу `/orders/availability/week?cafe_id={id}`.
+- Если сегодня `can_order === true`, используем текущую дату; иначе выбираем ближайший день из `week.days`, где `can_order === true`.
+- Если доступных дат нет — блокируем отправку и показываем причину из `reason`.
+
 GET /orders
   Auth: user (self) | manager (all)
   Query: ?date={date}&cafe_id={int}&status={pending|confirmed|cancelled}

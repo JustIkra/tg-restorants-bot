@@ -1,10 +1,14 @@
 __init__
 auth
+cache
 config
 database
+gemini
+kafka
 main
 models
 repositories
 routers
 schemas
 services
+telegram

@@ -1,8 +1,22 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, type ReactElement } from "react";
 import {
-  FaBowlFood, FaDrumstickBite, FaCarrot, FaIceCream, FaMugHot, FaCookie, FaBurger, FaPizzaSlice, FaFish, FaBacon, FaLeaf, FaUtensils, FaCartShopping, FaSpinner, FaExclamationTriangle
+  FaBowlFood,
+  FaDrumstickBite,
+  FaCarrot,
+  FaIceCream,
+  FaMugHot,
+  FaCookie,
+  FaBurger,
+  FaPizzaSlice,
+  FaFish,
+  FaBacon,
+  FaLeaf,
+  FaUtensils,
+  FaCartShopping,
+  FaSpinner,
+  FaTriangleExclamation
 } from "react-icons/fa6";
 
 import CafeSelector from "@/components/CafeSelector/CafeSelector";
@@ -11,12 +25,24 @@ import MenuSection from "@/components/Menu/MenuSection";
 import ExtrasSection from "@/components/ExtrasSection/ExtrasSection";
 import CartSummary from "@/components/Cart/CartSummary";
 import CheckoutButton from "@/components/Cart/CheckoutButton";
+import TelegramFallback from "@/components/TelegramFallback/TelegramFallback";
 import { useCafes, useCombos, useMenu } from "@/lib/api/hooks";
+import { apiRequest, authenticateWithTelegram } from "@/lib/api/client";
+import { isTelegramWebApp, initTelegramWebApp, getTelegramInitData } from "@/lib/telegram/webapp";
 
 export default function Home() {
+  const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [activeCafeId, setActiveCafeId] = useState<number | null>(null);
-  const [activeCategoryId, setActiveCategoryId] = useState<string>("all");
+  const [activeCategoryId, setActiveCategoryId] = useState<string | number>("all");
   const [cart, setCart] = useState<{ [key: number]: number }>({});
+  const [availableDays, setAvailableDays] = useState<
+    { date: string; weekday: string; can_order: boolean; deadline: string | null; reason: string | null }[]
+  >([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [availabilityError, setAvailabilityError] = useState<Error | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   // Fetch real data from API using SWR hooks
   const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(true);
@@ -29,6 +55,33 @@ export default function Home() {
     if (!cafesData) return [];
     return cafesData.map(cafe => ({ id: cafe.id, name: cafe.name }));
   }, [cafesData]);
+
+  // Check if running in Telegram and initialize
+  useEffect(() => {
+    const inTelegram = isTelegramWebApp();
+    setIsInTelegram(inTelegram);
+
+    if (inTelegram) {
+      // Initialize Telegram WebApp
+      initTelegramWebApp();
+
+      // Authenticate with backend
+      const initData = getTelegramInitData();
+      if (initData) {
+        authenticateWithTelegram(initData)
+          .then(() => {
+            setIsAuthenticated(true);
+            console.log("Telegram auth successful");
+          })
+          .catch(err => {
+            console.error("Telegram auth failed:", err);
+            setAuthError(err.message || "Не удалось авторизоваться");
+          });
+      } else {
+        setAuthError("Telegram initData недоступен");
+      }
+    }
+  }, []);
 
   // Auto-select first cafe when data loads
   useEffect(() => {
@@ -47,7 +100,7 @@ export default function Home() {
     const categoryList = [{ id: "all", name: "Все", icon: <FaBowlFood /> }];
 
     // Map category names to icons
-    const categoryIcons: { [key: string]: JSX.Element } = {
+    const categoryIcons: Record<string, ReactElement> = {
       soup: <FaBowlFood />,
       main: <FaDrumstickBite />,
       salad: <FaCarrot />,
@@ -90,7 +143,50 @@ export default function Home() {
     setCart({}); // Reset cart when switching cafes
   };
 
-  const handleCategoryClick = (id: string) => setActiveCategoryId(id);
+  const handleCategoryClick = (id: string | number) => setActiveCategoryId(id);
+
+  // Load available dates for orders (today if possible, else nearest available)
+  useEffect(() => {
+    if (!activeCafeId) {
+      setAvailableDays([]);
+      setSelectedDate(null);
+      setAvailabilityError(null);
+      return;
+    }
+
+    const loadAvailability = async () => {
+      setAvailabilityLoading(true);
+      try {
+        const week = await apiRequest<{
+          days: {
+            date: string;
+            weekday: string;
+            can_order: boolean;
+            deadline: string | null;
+            reason: string | null;
+          }[];
+        }>(`/orders/availability/week?cafe_id=${activeCafeId}`);
+
+        const days = week?.days ?? [];
+        setAvailableDays(days);
+
+        const todayIso = new Date().toISOString().split("T")[0];
+        const today = days.find(d => d.date === todayIso && d.can_order);
+        const nearest = today ?? days.find(d => d.can_order) ?? null;
+        setSelectedDate(nearest?.date ?? null);
+        setAvailabilityError(null);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error("Не удалось загрузить доступные даты");
+        setAvailabilityError(error);
+        setSelectedDate(null);
+        setAvailableDays([]);
+      } finally {
+        setAvailabilityLoading(false);
+      }
+    };
+
+    void loadAvailability();
+  }, [activeCafeId]);
 
   const addToCart = (dishId: number) =>
     setCart(prev => ({ ...prev, [dishId]: (prev[dishId] || 0) + 1 }));
@@ -120,6 +216,48 @@ export default function Home() {
   // Combined error state
   const error = cafesError || menuError || combosError || extrasError;
 
+  const noAvailableDates = !selectedDate && !availabilityLoading && availableDays.length > 0;
+  const isCheckoutDisabled = totalItems === 0 || !selectedDate || availabilityLoading || noAvailableDates;
+
+  // Show loading while checking Telegram environment
+  if (isInTelegram === null) {
+    return (
+      <div className="min-h-screen bg-[#130F30] flex items-center justify-center">
+        <FaSpinner className="text-white text-4xl animate-spin" />
+      </div>
+    );
+  }
+
+  // Show fallback UI if not in Telegram
+  if (!isInTelegram) {
+    return <TelegramFallback />;
+  }
+
+  // Show loading while authenticating
+  if (isInTelegram && !isAuthenticated && !authError) {
+    return (
+      <div className="min-h-screen bg-[#130F30] flex items-center justify-center">
+        <div className="text-center">
+          <FaSpinner className="text-white text-4xl animate-spin mx-auto mb-4" />
+          <p className="text-white">Авторизация...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if auth failed
+  if (isInTelegram && authError) {
+    return (
+      <div className="min-h-screen bg-[#130F30] flex items-center justify-center p-4">
+        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-6 max-w-md">
+          <FaTriangleExclamation className="text-red-400 text-4xl mx-auto mb-4" />
+          <h2 className="text-white text-xl font-bold mb-2">Ошибка авторизации</h2>
+          <p className="text-red-200">{authError}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full min-h-screen bg-[#130F30] overflow-x-hidden">
 
@@ -135,7 +273,7 @@ export default function Home() {
         {/* Error message */}
         {error && (
           <div className="mx-4 md:mx-6 mt-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg flex items-center gap-3">
-            <FaExclamationTriangle className="text-red-400 text-xl flex-shrink-0" />
+            <FaTriangleExclamation className="text-red-400 text-xl flex-shrink-0" />
             <div>
               <p className="text-red-200 font-semibold">Ошибка загрузки данных</p>
               <p className="text-red-300 text-sm">{error.message}</p>
@@ -176,6 +314,32 @@ export default function Home() {
             </div>
 
             <div className="px-4 md:px-6 pt-4">
+              <div className="mb-4">
+                <div className="flex items-center gap-2 text-white text-sm md:text-base">
+                  <span className="font-semibold">Дата заказа:</span>
+                  {availabilityLoading && (
+                    <span className="flex items-center gap-2 text-gray-200">
+                      <FaSpinner className="animate-spin" />
+                      Проверяем доступность...
+                    </span>
+                  )}
+                  {!availabilityLoading && selectedDate && (
+                    <span className="px-2 py-1 rounded-md bg-white/10 border border-white/10">
+                      {selectedDate}
+                    </span>
+                  )}
+                  {!availabilityLoading && !selectedDate && (
+                    <span className="text-red-200">Нет доступных дат</span>
+                  )}
+                </div>
+                {availabilityError && (
+                  <p className="text-red-200 text-sm mt-1">{availabilityError.message}</p>
+                )}
+                {noAvailableDates && (
+                  <p className="text-red-200 text-sm mt-1">Попробуйте выбрать другое кафе или время.</p>
+                )}
+              </div>
+
               <h3 className="text-white text-lg md:text-xl font-semibold mb-4">Меню кафе</h3>
               {menuLoading ? (
                 <div className="flex items-center justify-center py-12">
@@ -237,7 +401,7 @@ export default function Home() {
         </div>
         <CartSummary totalItems={totalItems} totalPrice={totalPrice} />
       </div>
-      <CheckoutButton disabled={totalItems === 0} />
+      <CheckoutButton disabled={isCheckoutDisabled} />
     </div>
   </div>
 </div>

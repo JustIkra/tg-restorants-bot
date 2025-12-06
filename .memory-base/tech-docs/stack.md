@@ -8,6 +8,12 @@
 - Kafka
 - Redis
 
+### Nginx
+- Image: nginx:1.27-alpine
+- Role: Reverse proxy
+- Port: 80 (единственный публичный порт)
+- Purpose: Единая точка входа для всех HTTP-сервисов
+
 ### Frameworks & Libraries
 
 **Production:**
