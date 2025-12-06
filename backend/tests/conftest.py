@@ -6,6 +6,11 @@ import os
 os.environ["TELEGRAM_BOT_TOKEN"] = "test_bot_token_123456:ABCdefGHIjklMNOpqrsTUVwxyz"
 os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_at_least_32_chars_long_for_security"
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["KAFKA_BROKER_URL"] = "localhost:9092"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["GEMINI_API_KEYS"] = "test_key_1,test_key_2,test_key_3"
+os.environ["GEMINI_MODEL"] = "gemini-2.0-flash-exp"
+os.environ["GEMINI_MAX_REQUESTS_PER_KEY"] = "195"
 
 from collections.abc import AsyncGenerator
 from datetime import date, datetime, time
@@ -19,7 +24,7 @@ from src.auth.jwt import create_access_token
 from src.database import get_db
 from src.main import app
 from src.models.base import Base
-from src.models.cafe import Cafe, Combo, MenuItem
+from src.models.cafe import Cafe, CafeLinkRequest, Combo, MenuItem
 from src.models.deadline import Deadline
 from src.models.order import Order
 from src.models.user import User
@@ -62,6 +67,7 @@ async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession
         finally:
             # Clean up tables after each test
             await session.execute(Order.__table__.delete())
+            await session.execute(CafeLinkRequest.__table__.delete())
             await session.execute(Deadline.__table__.delete())
             await session.execute(MenuItem.__table__.delete())
             await session.execute(Combo.__table__.delete())

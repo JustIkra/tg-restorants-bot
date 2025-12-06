@@ -7,7 +7,7 @@ are reached. Persists usage counters in Redis for reliability across restarts.
 
 import structlog
 
-from backend.src.cache.redis_client import get_int, get_redis_client, increment, set_cache
+from ..cache.redis_client import get_int, get_redis_client, increment, set_cache
 
 logger = structlog.get_logger(__name__)
 
@@ -323,7 +323,7 @@ def get_key_pool() -> GeminiAPIKeyPool:
     global _key_pool
 
     if _key_pool is None:
-        from backend.src.config import settings
+        from ..config import settings
 
         if not settings.gemini_keys_list:
             raise RuntimeError(

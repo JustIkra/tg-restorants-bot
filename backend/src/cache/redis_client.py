@@ -8,7 +8,7 @@ Uses redis.asyncio for async support.
 import structlog
 from redis.asyncio import ConnectionPool, Redis
 
-from backend.src.config import settings
+from ..config import settings
 
 logger = structlog.get_logger(__name__)
 

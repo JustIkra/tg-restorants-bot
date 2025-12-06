@@ -4,7 +4,8 @@ Redis caching module for lunch bot.
 Provides async Redis client wrapper with common caching operations.
 """
 
-from backend.src.cache.redis_client import (
+from .redis_client import (
+    close_redis_client,
     delete_cache,
     get_cache,
     get_int,
@@ -20,4 +21,5 @@ __all__ = [
     "delete_cache",
     "increment",
     "get_int",
+    "close_redis_client",
 ]

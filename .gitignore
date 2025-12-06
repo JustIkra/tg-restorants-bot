@@ -11,3 +11,5 @@ __pycache__/
 .coverage
 htmlcov/
 *.egg-info/
+.mcp.json
+CLAUDE.md

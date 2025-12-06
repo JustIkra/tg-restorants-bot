@@ -9,9 +9,9 @@ import json
 from typing import Any
 
 import structlog
-from backend.src.config import settings
-from backend.src.gemini.key_pool import AllKeysExhaustedException, GeminiAPIKeyPool
-from backend.src.gemini.prompts import RECOMMENDATION_PROMPT
+from ..config import settings
+from .key_pool import AllKeysExhaustedException, GeminiAPIKeyPool
+from .prompts import RECOMMENDATION_PROMPT
 from google import genai
 from google.genai import errors as genai_errors
 
@@ -246,7 +246,7 @@ def get_recommendation_service() -> GeminiRecommendationService:
     global _recommendation_service
 
     if _recommendation_service is None:
-        from backend.src.gemini.key_pool import get_key_pool
+        from .key_pool import get_key_pool
 
         _recommendation_service = GeminiRecommendationService(get_key_pool())
 

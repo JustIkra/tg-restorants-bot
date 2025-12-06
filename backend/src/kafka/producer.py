@@ -5,8 +5,8 @@ from datetime import datetime
 
 from faststream.kafka import KafkaBroker
 
-from backend.src.config import settings
-from backend.src.kafka.events import DailyTaskEvent, DeadlinePassedEvent
+from ..config import settings
+from .events import DailyTaskEvent, DeadlinePassedEvent
 
 logger = logging.getLogger(__name__)
 

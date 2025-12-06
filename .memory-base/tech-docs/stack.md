@@ -11,17 +11,23 @@
 ### Frameworks & Libraries
 
 **Production:**
-- faststream >= 0.6.3 — async message broker
+- faststream >= 0.6.3 — async message broker (Kafka integration)
 - fastapi >= 0.120.0 — web framework
 - uvicorn >= 0.38.0 — ASGI server
 - pydantic >= 2.12.0 — data validation
 - sqlalchemy >= 2.0.44 — ORM (async)
 - asyncpg >= 0.31.0 — async PostgreSQL driver
 - alembic >= 1.17.0 — database migrations
+- redis >= 5.0.0 — async Redis client for caching
+- aiogram >= 3.0.0 — Telegram Bot API framework
+- google-genai >= 1.0.0 — Google Generative AI (Gemini API)
+- apscheduler >= 3.10.0 — task scheduler for batch jobs
+- structlog — structured logging
 
 **Development:**
 - mypy >= 1.19.0 — static type checker
 - ruff >= 0.14.0 — linter & formatter
+- pytest >= 8.0.0 — testing framework
 
 ---
 

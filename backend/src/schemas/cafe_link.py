@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from ..models.cafe import LinkRequestStatus
+
 
 class CreateLinkRequestSchema(BaseModel):
     """Schema for creating a cafe link request."""
@@ -17,7 +19,7 @@ class LinkRequestSchema(BaseModel):
     cafe_id: int
     tg_chat_id: int
     tg_username: str | None
-    status: str  # pending, approved, rejected
+    status: LinkRequestStatus
     created_at: datetime
     processed_at: datetime | None
 

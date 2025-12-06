@@ -1,5 +1,5 @@
 from .base import Base, TimestampMixin
-from .cafe import Cafe, Combo, MenuItem
+from .cafe import Cafe, CafeLinkRequest, Combo, MenuItem
 from .deadline import Deadline
 from .order import Order
 from .summary import Summary
@@ -10,6 +10,7 @@ __all__ = [
     "TimestampMixin",
     "User",
     "Cafe",
+    "CafeLinkRequest",
     "Combo",
     "MenuItem",
     "Deadline",

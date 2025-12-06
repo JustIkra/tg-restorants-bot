@@ -478,6 +478,141 @@ Summary {
 
 ---
 
+## Cafe Link Management
+
+### POST /api/v1/cafes/{cafe_id}/link-request
+Create a cafe link request (public endpoint for Telegram bot)
+
+```
+POST /api/v1/cafes/{cafe_id}/link-request
+  Auth: public (через Telegram бота)
+  Body: {
+    tg_chat_id: int,
+    tg_username: string | null
+  }
+  Response: LinkRequest
+  Status: 201 Created
+```
+
+**LinkRequest schema:**
+```
+LinkRequest {
+  id: int
+  cafe_id: int
+  cafe_name: string
+  tg_chat_id: int
+  tg_username: string | null
+  status: "pending" | "approved" | "rejected"
+  created_at: datetime
+  processed_at: datetime | null
+}
+```
+
+### GET /api/v1/cafe-requests
+List all cafe link requests (manager only)
+
+```
+GET /api/v1/cafe-requests
+  Auth: manager
+  Query: ?status={pending|approved|rejected}&skip=0&limit=100
+  Response: {
+    items: LinkRequest[],
+    total: int
+  }
+```
+
+### POST /api/v1/cafe-requests/{request_id}/approve
+Approve a cafe link request (manager only)
+
+```
+POST /api/v1/cafe-requests/{request_id}/approve
+  Auth: manager
+  Response: LinkRequest
+  Status: 200 OK
+```
+
+Links the cafe to the Telegram chat and enables notifications.
+
+### POST /api/v1/cafe-requests/{request_id}/reject
+Reject a cafe link request (manager only)
+
+```
+POST /api/v1/cafe-requests/{request_id}/reject
+  Auth: manager
+  Response: LinkRequest
+  Status: 200 OK
+```
+
+### PATCH /api/v1/cafes/{cafe_id}/notifications
+Enable/disable notifications for a cafe (manager only)
+
+```
+PATCH /api/v1/cafes/{cafe_id}/notifications
+  Auth: manager
+  Body: {
+    enabled: bool
+  }
+  Response: Cafe
+```
+
+### DELETE /api/v1/cafes/{cafe_id}/link
+Unlink Telegram from cafe (manager only)
+
+```
+DELETE /api/v1/cafes/{cafe_id}/link
+  Auth: manager
+  Response: 204 No Content
+```
+
+Removes Telegram link and disables notifications.
+
+---
+
+## Recommendations
+
+### GET /api/v1/users/{tgid}/recommendations
+Get personalized food recommendations for a user
+
+```
+GET /api/v1/users/{tgid}/recommendations
+  Auth: manager | self
+  Response: RecommendationsResponse
+```
+
+**RecommendationsResponse schema:**
+```
+RecommendationsResponse {
+  summary: string | null            # AI-generated summary of eating habits
+  tips: string[]                    # Personalized recommendations
+  stats: OrderStats                 # Current order statistics
+  generated_at: datetime | null     # When recommendations were generated
+}
+
+OrderStats {
+  orders_count: int                    # Number of orders in last 30 days
+  categories: {                        # Category distribution (percentages)
+    "soup": float,
+    "salad": float,
+    "main": float,
+    "extra": float
+  }
+  unique_dishes: int                   # Number of unique dishes ordered
+  total_dishes_available: int          # Total dishes available in menu
+  favorite_dishes: [{                  # Top 5 most ordered dishes
+    name: string,
+    count: int
+  }]
+}
+```
+
+**Notes:**
+- Recommendations are generated nightly by a batch worker
+- Returns cached data from Redis (TTL: 24 hours)
+- If no recommendations available, returns empty `summary` and `tips` with current stats
+- Requires minimum 5 orders in last 30 days for generation
+
+---
+
 ## HTTP Status Codes
 
 | Code | Description |
