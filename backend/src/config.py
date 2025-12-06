@@ -17,7 +17,23 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
+    # Kafka
+    KAFKA_BROKER_URL: str = "localhost:9092"
+
+    # Redis
+    REDIS_URL: str
+
+    # Gemini API
+    GEMINI_API_KEYS: str
+    GEMINI_MODEL: str = "gemini-2.0-flash-exp"
+    GEMINI_MAX_REQUESTS_PER_KEY: int = 195
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def gemini_keys_list(self) -> list[str]:
+        """Parse comma-separated Gemini API keys into a list."""
+        return [k.strip() for k in self.GEMINI_API_KEYS.split(",") if k.strip()]
 
     @model_validator(mode="after")
     def validate_secrets(self):

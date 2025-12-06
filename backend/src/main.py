@@ -6,10 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import (
     auth_router,
+    cafe_links_router,
     cafes_router,
     deadlines_router,
     menu_router,
     orders_router,
+    recommendations_router,
     summaries_router,
     users_router,
 )
@@ -38,10 +40,12 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(cafes_router, prefix="/api/v1")
+app.include_router(cafe_links_router, prefix="/api/v1")
 app.include_router(menu_router, prefix="/api/v1")
 app.include_router(deadlines_router, prefix="/api/v1")
 app.include_router(orders_router, prefix="/api/v1")
 app.include_router(summaries_router, prefix="/api/v1")
+app.include_router(recommendations_router, prefix="/api/v1")
 
 
 @app.get("/health")

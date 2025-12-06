@@ -42,7 +42,7 @@ async def get_summary(
     summary_id: int,
     manager: ManagerUser,
     service: Annotated[SummaryService, Depends(get_summary_service)],
-    format: str = Query("json", pattern="^(json|csv)$"),
+    format: str = Query("json", pattern=r"^(json|csv)$"),
 ):
     """Get summary by ID (manager only). Supports json and csv formats."""
     summary = await service.get_summary(summary_id)

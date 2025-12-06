@@ -9,7 +9,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 revision: str = "001"
 down_revision: Union[str, None] = None
@@ -48,7 +47,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("cafe_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("categories", postgresql.JSONB(), nullable=False),
+        sa.Column("categories", sa.JSON(), nullable=False),
         sa.Column("price", sa.Numeric(10, 2), nullable=False),
         sa.Column("is_available", sa.Boolean(), nullable=False, server_default="true"),
         sa.ForeignKeyConstraint(["cafe_id"], ["cafes.id"], ondelete="CASCADE"),
@@ -94,8 +93,8 @@ def upgrade() -> None:
         sa.Column("order_date", sa.Date(), nullable=False),
         sa.Column("status", sa.String(50), nullable=False, server_default="pending"),
         sa.Column("combo_id", sa.Integer(), nullable=False),
-        sa.Column("combo_items", postgresql.JSONB(), nullable=False),
-        sa.Column("extras", postgresql.JSONB(), nullable=False, server_default="[]"),
+        sa.Column("combo_items", sa.JSON(), nullable=False),
+        sa.Column("extras", sa.JSON(), nullable=False, server_default="[]"),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("total_price", sa.Numeric(10, 2), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -116,7 +115,7 @@ def upgrade() -> None:
         sa.Column("date", sa.Date(), nullable=False),
         sa.Column("total_orders", sa.Integer(), nullable=False),
         sa.Column("total_amount", sa.Numeric(10, 2), nullable=False),
-        sa.Column("breakdown", postgresql.JSONB(), nullable=False),
+        sa.Column("breakdown", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(["cafe_id"], ["cafes.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),

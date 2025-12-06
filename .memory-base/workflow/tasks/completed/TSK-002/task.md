@@ -2,7 +2,7 @@
 id: TSK-002
 title: "Реализация Backend API для Lunch Order Bot"
 pipeline: feature
-status: pending
+status: completed
 created_at: 2025-12-06T00:00:00
 related_files:
   - backend/

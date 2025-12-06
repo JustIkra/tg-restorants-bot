@@ -22,6 +22,9 @@
 - [Git Workflow](tech-docs/rules/git-workflow.md) - branches, commits, PRs
 - [Testing](tech-docs/rules/testing.md) - pytest, fixtures, coverage
 
+### Automation
+- [Claude Agents](tech-docs/claude-agents.md) - Playwright agents for web testing, workflow agents
+
 ## Plans
 - [AI Agents Workflow Design](plans/2025-12-05-ai-agents-workflow-design.md) - Supervisor + agents architecture
 
