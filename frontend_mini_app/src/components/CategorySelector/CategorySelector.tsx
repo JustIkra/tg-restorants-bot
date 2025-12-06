@@ -1,11 +1,11 @@
 import React from "react";
 
-type Category = { id: number; name: string; icon: React.ReactNode };
+type Category = { id: number | string; name: string; icon: React.ReactNode };
 
 interface CategorySelectorProps {
   categories: Category[];
-  activeCategoryId: number;
-  onCategoryClick: (id: number) => void;
+  activeCategoryId: number | string;
+  onCategoryClick: (id: number | string) => void;
 }
 
 const CategorySelector: React.FC<CategorySelectorProps> = ({ categories, activeCategoryId, onCategoryClick }) => (

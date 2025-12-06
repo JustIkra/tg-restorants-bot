@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env.local
+.env
+*.log
+.swc
+README.md
+.gitignore
+.dockerignore
+tsconfig.tsbuildinfo
+jest.config.js
+jest.setup.js

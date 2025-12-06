@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - lunch-bot-network
 
   # Message Broker
   kafka:
@@ -39,6 +41,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+    networks:
+      - lunch-bot-network
 
   # Cache
   redis:
@@ -54,6 +58,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - lunch-bot-network
 
   # Backend API
   backend:
@@ -77,10 +83,34 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_DAYS: 7
-      CORS_ORIGINS: '["http://localhost:3000"]'
+      CORS_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
     volumes:
       - ./backend:/app
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - lunch-bot-network
+
+  # Frontend (Telegram Mini App)
+  frontend:
+    build:
+      context: ./frontend_mini_app
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+    container_name: lunch-bot-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000/api/v1
+    command: npm run dev
+    volumes:
+      - ./frontend_mini_app:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - lunch-bot-network
 
   # Telegram Bot
   telegram-bot:
@@ -100,6 +130,8 @@ services:
     volumes:
       - ./backend:/app
     command: python -m src.telegram.bot
+    networks:
+      - lunch-bot-network
 
   # Workers
   notifications-worker:
@@ -122,6 +154,8 @@ services:
     volumes:
       - ./backend:/app
     command: python -m workers.notifications
+    networks:
+      - lunch-bot-network
 
   recommendations-worker:
     build:
@@ -143,7 +177,13 @@ services:
     volumes:
       - ./backend:/app
     command: python -m workers.recommendations
+    networks:
+      - lunch-bot-network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  lunch-bot-network:
+    driver: bridge

@@ -1,51 +1,96 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  FaBowlFood, FaDrumstickBite, FaCarrot, FaIceCream, FaMugHot, FaCookie, FaBurger, FaPizzaSlice, FaFish, FaBacon, FaLeaf, FaUtensils, FaCartShopping
+import { useState, useMemo, useEffect } from "react";
+import {
+  FaBowlFood, FaDrumstickBite, FaCarrot, FaIceCream, FaMugHot, FaCookie, FaBurger, FaPizzaSlice, FaFish, FaBacon, FaLeaf, FaUtensils, FaCartShopping, FaSpinner, FaExclamationTriangle
 } from "react-icons/fa6";
 
 import CafeSelector from "@/components/CafeSelector/CafeSelector";
 import CategorySelector from "@/components/CategorySelector/CategorySelector";
 import MenuSection from "@/components/Menu/MenuSection";
+import ExtrasSection from "@/components/ExtrasSection/ExtrasSection";
 import CartSummary from "@/components/Cart/CartSummary";
 import CheckoutButton from "@/components/Cart/CheckoutButton";
+import { useCafes, useCombos, useMenu } from "@/lib/api/hooks";
 
 export default function Home() {
-  const [activeCafeId, setActiveCafeId] = useState<number>(1);
-  const [activeCategoryId, setActiveCategoryId] = useState<number>(1);
+  const [activeCafeId, setActiveCafeId] = useState<number | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<string>("all");
   const [cart, setCart] = useState<{ [key: number]: number }>({});
 
-  const cafes = Array.from({ length: 12 }).map((_, i) => ({ id: i + 1, name: `кафе ${i + 1}` }));
+  // Fetch real data from API using SWR hooks
+  const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(true);
+  const { data: combosData, error: combosError, isLoading: combosLoading } = useCombos(activeCafeId);
+  const { data: menuItems, error: menuError, isLoading: menuLoading } = useMenu(activeCafeId);
+  const { data: extraItems, error: extrasError, isLoading: extrasLoading } = useMenu(activeCafeId, "extra");
 
-  const categories = [
-    { id: 1, name: "Все", icon: <FaBowlFood /> }, // Сделал 1 = Все
-    { id: 2, name: "Второе", icon: <FaDrumstickBite /> },
-    { id: 3, name: "Салаты", icon: <FaCarrot /> },
-    { id: 4, name: "Десерты", icon: <FaIceCream /> },
-    { id: 5, name: "Напитки", icon: <FaMugHot /> },
-    { id: 6, name: "Закуски", icon: <FaCookie /> },
-    { id: 7, name: "Бургеры", icon: <FaBurger /> },
-    { id: 8, name: "Пицца", icon: <FaPizzaSlice /> },
-    { id: 9, name: "Суши", icon: <FaFish /> },
-    { id: 10, name: "Стейки", icon: <FaBacon /> },
-    { id: 11, name: "Вегетарианские", icon: <FaLeaf /> },
-    { id: 12, name: "Паста", icon: <FaUtensils /> },
-  ];
+  // Map cafes data to CafeSelector format
+  const cafes = useMemo(() => {
+    if (!cafesData) return [];
+    return cafesData.map(cafe => ({ id: cafe.id, name: cafe.name }));
+  }, [cafesData]);
 
-  const dishes = [
-    { id: 1, name: "Борщ украинский", description: "С говядиной, сметаной и зеленью", price: 450, categoryId: 1 },
-    { id: 2, name: "Стейк Рибай", description: "С овощами гриль и соусом пеперони", price: 1200, categoryId: 10 },
-    { id: 3, name: "Цезарь с курицей", description: "С соусом цезарь и пармезаном", price: 550, categoryId: 3 },
-    { id: 4, name: "Тирамису", description: "Итальянский десерт", price: 350, categoryId: 4 },
-    { id: 5, name: "Пицца Маргарита", description: "Моцарелла, томаты, базилик", price: 650, categoryId: 8 },
-    { id: 6, name: "Сет Калифорния", description: "8 роллов с лососем и авокадо", price: 850, categoryId: 9 },
-    { id: 7, name: "Бургер Чизбургер", description: "Говяжья котлета, сыр, овощи", price: 480, categoryId: 7 },
-    { id: 8, name: "Лазанья", description: "С мясным соусом бешамель", price: 520, categoryId: 12 },
-  ];
+  // Auto-select first cafe when data loads
+  useEffect(() => {
+    if (cafes.length > 0 && activeCafeId === null) {
+      setActiveCafeId(cafes[0].id);
+    }
+  }, [cafes, activeCafeId]);
 
-  const handleCafeClick = (id: number) => setActiveCafeId(id);
-  const handleCategoryClick = (id: number) => setActiveCategoryId(id);
+  // Extract unique categories from menu items
+  const categories = useMemo(() => {
+    const categorySet = new Set<string>();
+    if (menuItems) {
+      menuItems.forEach(item => categorySet.add(item.category));
+    }
+
+    const categoryList = [{ id: "all", name: "Все", icon: <FaBowlFood /> }];
+
+    // Map category names to icons
+    const categoryIcons: { [key: string]: JSX.Element } = {
+      soup: <FaBowlFood />,
+      main: <FaDrumstickBite />,
+      salad: <FaCarrot />,
+      dessert: <FaIceCream />,
+      drink: <FaMugHot />,
+      snack: <FaCookie />,
+      burger: <FaBurger />,
+      pizza: <FaPizzaSlice />,
+      sushi: <FaFish />,
+      steak: <FaBacon />,
+      vegetarian: <FaLeaf />,
+      pasta: <FaUtensils />,
+    };
+
+    categorySet.forEach(cat => {
+      categoryList.push({
+        id: cat,
+        name: cat.charAt(0).toUpperCase() + cat.slice(1),
+        icon: categoryIcons[cat] || <FaUtensils />
+      });
+    });
+
+    return categoryList;
+  }, [menuItems]);
+
+  // Map menu items to dishes format for MenuSection
+  const dishes = useMemo(() => {
+    if (!menuItems) return [];
+    return menuItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      description: item.description || "",
+      price: item.price || 0,
+      categoryId: item.category,
+    }));
+  }, [menuItems]);
+
+  const handleCafeClick = (id: number) => {
+    setActiveCafeId(id);
+    setCart({}); // Reset cart when switching cafes
+  };
+
+  const handleCategoryClick = (id: string) => setActiveCategoryId(id);
 
   const addToCart = (dishId: number) =>
     setCart(prev => ({ ...prev, [dishId]: (prev[dishId] || 0) + 1 }));
@@ -65,9 +110,15 @@ export default function Home() {
     .filter(d => !!cart[d.id])
     .reduce((sum, d) => sum + d.price * (cart[d.id] || 0), 0);
 
-  const filteredDishes = activeCategoryId === 1
+  const filteredDishes = activeCategoryId === "all"
     ? dishes
     : dishes.filter(d => d.categoryId === activeCategoryId);
+
+  // Combined loading state
+  const isLoading = cafesLoading || (activeCafeId !== null && (menuLoading || combosLoading));
+
+  // Combined error state
+  const error = cafesError || menuError || combosError || extrasError;
 
   return (
     <div className="relative w-full min-h-screen bg-[#130F30] overflow-x-hidden">
@@ -81,36 +132,83 @@ export default function Home() {
           <p className="text-gray-300 text-sm md:text-base">Выберите категорию и блюдо</p>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <div className="mx-4 md:mx-6 mt-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg flex items-center gap-3">
+            <FaExclamationTriangle className="text-red-400 text-xl flex-shrink-0" />
+            <div>
+              <p className="text-red-200 font-semibold">Ошибка загрузки данных</p>
+              <p className="text-red-300 text-sm">{error.message}</p>
+            </div>
+          </div>
+        )}
+
         <div className="px-4 md:px-6 py-4">
           <h2 className="text-white text-base md:text-lg font-semibold mb-3">Названия заведений</h2>
-          <div className="flex overflow-x-auto pb-4 scrollbar-hide">
-            {CafeSelector ? (
-              <CafeSelector cafes={cafes} activeCafeId={activeCafeId} onCafeClick={handleCafeClick} />
-            ) : (
-              <div className="text-white">Компонент CafeSelector не найден</div>
-            )}
-          </div>
-        </div>
-
-        <div className="px-4 md:px-6">
-          <h2 className="text-white text-base md:text-lg font-semibold mb-3">Категории блюд</h2>
-          <div className="flex overflow-x-auto pb-2 scrollbar-hide">
-            {CategorySelector ? (
-              <CategorySelector categories={categories} activeCategoryId={activeCategoryId} onCategoryClick={handleCategoryClick} />
-            ) : (
-              <div className="text-white">Компонент CategorySelector не найден</div>
-            )}
-          </div>
-        </div>
-
-        <div className="px-4 md:px-6 pt-4 pb-[180px]">
-          <h3 className="text-white text-lg md:text-xl font-semibold mb-4">Меню кафе</h3>
-          {MenuSection ? (
-            <MenuSection dishes={filteredDishes} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} />
+          {cafesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <FaSpinner className="text-white text-2xl animate-spin" />
+              <span className="ml-3 text-white">Загрузка кафе...</span>
+            </div>
+          ) : cafes.length === 0 ? (
+            <div className="text-gray-400 text-center py-8">Нет доступных кафе</div>
           ) : (
-            <div className="text-white">Компонент MenuSection не найден</div>
+            <div className="flex overflow-x-auto pb-4 scrollbar-hide">
+              <CafeSelector cafes={cafes} activeCafeId={activeCafeId ?? -1} onCafeClick={handleCafeClick} />
+            </div>
           )}
         </div>
+
+        {activeCafeId && (
+          <>
+            <div className="px-4 md:px-6">
+              <h2 className="text-white text-base md:text-lg font-semibold mb-3">Категории блюд</h2>
+              {menuLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <FaSpinner className="text-white text-xl animate-spin" />
+                  <span className="ml-2 text-white text-sm">Загрузка категорий...</span>
+                </div>
+              ) : (
+                <div className="flex overflow-x-auto pb-2 scrollbar-hide">
+                  <CategorySelector categories={categories} activeCategoryId={activeCategoryId} onCategoryClick={handleCategoryClick} />
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 md:px-6 pt-4">
+              <h3 className="text-white text-lg md:text-xl font-semibold mb-4">Меню кафе</h3>
+              {menuLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <FaSpinner className="text-white text-3xl animate-spin" />
+                  <span className="ml-3 text-white">Загрузка меню...</span>
+                </div>
+              ) : filteredDishes.length === 0 ? (
+                <div className="text-gray-400 text-center py-12">
+                  {dishes.length === 0 ? "Меню пока не добавлено" : "Нет блюд в этой категории"}
+                </div>
+              ) : (
+                <MenuSection dishes={filteredDishes} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} />
+              )}
+            </div>
+
+            <div className="px-4 md:px-6 pt-4 pb-[180px]">
+              {extrasLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <FaSpinner className="text-white animate-spin" />
+                  <span className="ml-2 text-white">Загрузка дополнений...</span>
+                </div>
+              ) : extraItems && extraItems.length > 0 ? (
+                <ExtrasSection extras={extraItems} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} />
+              ) : null}
+            </div>
+          </>
+        )}
+
+        {!activeCafeId && !cafesLoading && cafes.length > 0 && (
+          <div className="px-4 md:px-6 py-12 text-center">
+            <p className="text-gray-400">Выберите кафе, чтобы увидеть меню</p>
+          </div>
+        )}
       </div>
 
      <div
