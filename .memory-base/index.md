@@ -12,6 +12,7 @@
 - [Roles](tech-docs/roles.md) - user, manager
 - [Architecture](tech-docs/image.png) - system diagram
 - [Deployment](tech-docs/deployment.md) - Docker setup, Nginx reverse proxy, debugging, production deployment
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions for all components
 - [Kafka Architecture](tech-docs/kafka-architecture.md) - Event-driven notifications and batch jobs
 - [Gemini Integration](tech-docs/gemini-integration.md) - AI recommendations with API key pool
 
@@ -23,7 +24,7 @@
 ### Rules
 - [Code Style](tech-docs/rules/code-style.md) - Python 3.13, Next.js/React/Tailwind conventions
 - [Git Workflow](tech-docs/rules/git-workflow.md) - branches, commits, PRs
-- [Testing](tech-docs/rules/testing.md) - pytest, fixtures, coverage
+- [Testing](tech-docs/rules/testing.md) - pytest, fixtures, coverage, E2E tests (Playwright)
 
 ### Automation
 - [Claude Agents](tech-docs/claude-agents.md) - Playwright agents for web testing, workflow agents

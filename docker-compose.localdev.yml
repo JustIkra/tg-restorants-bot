@@ -25,9 +25,9 @@ services:
     image: postgres:17-alpine
     container_name: lunch-bot-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: lunch_bot
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-lunch_bot}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -91,7 +91,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-lunch_bot}
       KAFKA_BROKER_URL: kafka:29092
       REDIS_URL: redis://redis:6379
       JWT_ALGORITHM: HS256
@@ -136,7 +136,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-lunch_bot}
       REDIS_URL: redis://redis:6379
     volumes:
       - ./backend:/app
@@ -159,7 +159,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-lunch_bot}
       KAFKA_BROKER_URL: kafka:29092
       REDIS_URL: redis://redis:6379
     volumes:
@@ -182,7 +182,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-lunch_bot}
       KAFKA_BROKER_URL: kafka:29092
       REDIS_URL: redis://redis:6379
     volumes:

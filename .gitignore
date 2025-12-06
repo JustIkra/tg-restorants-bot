@@ -1,5 +1,7 @@
 ./agents
 .env
+.env.*
+!.env.*.example
 .claude
 .venv
 .pytest_cache
