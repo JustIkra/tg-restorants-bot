@@ -11,7 +11,7 @@ import { mutate } from "swr";
 
 const ReportsList: React.FC = () => {
   const { data: summaries, error, isLoading } = useSummaries();
-  const { data: cafes } = useCafes(false); // Get all cafes, not just active
+  const { data: cafes } = useCafes(true, false); // Get all cafes, not just active
   const { createSummary } = useCreateSummary();
   const { deleteSummary } = useDeleteSummary();
 

@@ -21,7 +21,7 @@ export default function MenuManager() {
   const [editingCombo, setEditingCombo] = useState<Combo | null>(null);
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
 
-  const { data: cafes, isLoading: cafesLoading } = useCafes(false);
+  const { data: cafes, isLoading: cafesLoading } = useCafes(true, false);
   const { data: combos, isLoading: combosLoading, mutate: mutateCombos } = useCombos(selectedCafeId);
   const { data: menuItems, isLoading: menuLoading, mutate: mutateMenu } = useMenu(selectedCafeId);
 

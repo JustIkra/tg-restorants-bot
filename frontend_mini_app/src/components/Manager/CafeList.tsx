@@ -11,7 +11,7 @@ interface CafeListProps {
 }
 
 const CafeList: React.FC<CafeListProps> = ({ onEdit }) => {
-  const { data: cafes, error, isLoading } = useCafes(false); // Get all cafes, not just active
+  const { data: cafes, error, isLoading } = useCafes(true, false); // Get all cafes, not just active
   const [processingId, setProcessingId] = useState<number | null>(null);
 
   const handleToggleStatus = async (cafe: Cafe) => {
