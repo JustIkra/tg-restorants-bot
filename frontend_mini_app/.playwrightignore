@@ -1,0 +1,7 @@
+# Ignore unit test files
+src/**/__tests__/**
+src/**/*.test.ts
+src/**/*.test.tsx
+**/__tests__/**
+**/*.test.ts
+**/*.test.tsx

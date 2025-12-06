@@ -1,0 +1,201 @@
+services:
+  # Reverse Proxy
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lunch-bot-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - lunch-bot-network
+
+  # Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: lunch-bot-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: lunch_bot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lunch-bot-network
+
+  # Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: lunch-bot-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - lunch-bot-network
+
+  # Cache
+  redis:
+    image: redis:7-alpine
+    container_name: lunch-bot-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lunch-bot-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-backend
+    env_file: ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      KAFKA_BROKER_URL: kafka:29092
+      REDIS_URL: redis://redis:6379
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_DAYS: 7
+      CORS_ORIGINS: '["http://localhost","https://lunchbot.vibe-labs.ru","https://web.telegram.org"]'
+    volumes:
+      - ./backend:/app
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - lunch-bot-network
+
+  # Frontend (Telegram Mini App)
+  frontend:
+    build:
+      context: ./frontend_mini_app
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    container_name: lunch-bot-frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost/api/v1
+    command: npm run dev
+    volumes:
+      - ./frontend_mini_app:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - lunch-bot-network
+
+  # Telegram Bot
+  telegram-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-telegram
+    env_file: ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend:/app
+    command: python -m src.telegram.bot
+    networks:
+      - lunch-bot-network
+
+  # Workers
+  notifications-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-notifications-worker
+    env_file: ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      KAFKA_BROKER_URL: kafka:29092
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend:/app
+    command: python -m workers.notifications
+    networks:
+      - lunch-bot-network
+
+  recommendations-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-recommendations-worker
+    env_file: ./backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@postgres:5432/lunch_bot
+      KAFKA_BROKER_URL: kafka:29092
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend:/app
+    command: python -m workers.recommendations
+    networks:
+      - lunch-bot-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  nginx_logs:
+
+networks:
+  lunch-bot-network:
+    driver: bridge

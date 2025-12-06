@@ -115,7 +115,7 @@ export function isTelegramWebApp(): boolean {
   }
 
   // Check if Telegram WebApp object exists
-  return Boolean(WebApp && WebApp.initData !== undefined);
+  return Boolean(WebApp && WebApp.initData);
 }
 
 /**

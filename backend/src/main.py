@@ -9,6 +9,7 @@ from .routers import (
     cafe_links_router,
     cafes_router,
     deadlines_router,
+    health_router,
     menu_router,
     orders_router,
     recommendations_router,
@@ -37,6 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(cafes_router, prefix="/api/v1")
@@ -46,8 +48,3 @@ app.include_router(deadlines_router, prefix="/api/v1")
 app.include_router(orders_router, prefix="/api/v1")
 app.include_router(summaries_router, prefix="/api/v1")
 app.include_router(recommendations_router, prefix="/api/v1")
-
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}

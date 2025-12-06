@@ -1,0 +1,235 @@
+# Production Docker Compose for Lunch Order Bot
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  # Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: lunch-bot-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: lunch_bot
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Cache
+  redis:
+    image: redis:7-alpine
+    container_name: lunch-bot-redis-prod
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: lunch-bot-kafka-prod
+    restart: always
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "kafka:29092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-backend-prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    env_file:
+      - .env.production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    # NO volumes for source code in production
+
+  # Frontend (Telegram Mini App)
+  frontend:
+    build:
+      context: ./frontend_mini_app
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: lunch-bot-frontend-prod
+    restart: always
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    # NO volumes for source code in production
+
+  # Telegram Bot
+  telegram-bot:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-telegram-prod
+    command: python -m src.telegram.bot
+    restart: always
+    depends_on:
+      - backend
+      - kafka
+    env_file:
+      - .env.production
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Notifications Worker
+  notifications-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-notifications-prod
+    command: python -m workers.notifications
+    restart: always
+    depends_on:
+      - backend
+      - kafka
+    env_file:
+      - .env.production
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Recommendations Worker
+  recommendations-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lunch-bot-recommendations-prod
+    command: python -m workers.recommendations
+    restart: always
+    depends_on:
+      - backend
+      - kafka
+    env_file:
+      - .env.production
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Reverse Proxy
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lunch-bot-nginx-prod
+    restart: always
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - lunch-bot-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  nginx_logs:
+
+networks:
+  lunch-bot-network:
+    driver: bridge
