@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, type ReactElement } from "react";
+import { useState, useMemo, useEffect, useRef, type ReactElement } from "react";
 import {
   FaBowlFood,
   FaDrumstickBite,
@@ -18,10 +18,12 @@ import {
   FaSpinner,
   FaTriangleExclamation
 } from "react-icons/fa6";
+import { useRouter } from "next/navigation";
 
 import CafeSelector from "@/components/CafeSelector/CafeSelector";
 import CategorySelector from "@/components/CategorySelector/CategorySelector";
 import MenuSection from "@/components/Menu/MenuSection";
+import DishModal from "@/components/Menu/DishModal";
 import ExtrasSection from "@/components/ExtrasSection/ExtrasSection";
 import CartSummary from "@/components/Cart/CartSummary";
 import CheckoutButton from "@/components/Cart/CheckoutButton";
@@ -31,18 +33,24 @@ import { apiRequest, authenticateWithTelegram } from "@/lib/api/client";
 import { isTelegramWebApp, initTelegramWebApp, getTelegramInitData } from "@/lib/telegram/webapp";
 
 export default function Home() {
+  const router = useRouter();
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [activeCafeId, setActiveCafeId] = useState<number | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | number>("all");
   const [cart, setCart] = useState<{ [key: number]: number }>({});
+  const [selectedDish, setSelectedDish] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [availableDays, setAvailableDays] = useState<
     { date: string; weekday: string; can_order: boolean; deadline: string | null; reason: string | null }[]
   >([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [availabilityError, setAvailabilityError] = useState<Error | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
+
+  const rotation = useRef(0);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // Fetch real data from API using SWR hooks
   const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(true);
@@ -75,7 +83,12 @@ export default function Home() {
           })
           .catch(err => {
             console.error("Telegram auth failed:", err);
-            setAuthError(err.message || "Не удалось авторизоваться");
+            const errorMessage = err instanceof Error
+              ? err.message
+              : typeof err === 'string'
+                ? err
+                : (err?.detail || err?.message || "Не удалось авторизоваться");
+            setAuthError(errorMessage);
           });
       } else {
         setAuthError("Telegram initData недоступен");
@@ -201,17 +214,45 @@ export default function Home() {
     });
 
   const totalItems = Object.values(cart).reduce((s, v) => s + v, 0);
-
-  const totalPrice = dishes
-    .filter(d => !!cart[d.id])
-    .reduce((sum, d) => sum + d.price * (cart[d.id] || 0), 0);
+  const totalPrice = dishes.filter(d => !!cart[d.id]).reduce((sum, d) => sum + d.price * (cart[d.id] || 0), 0);
 
   const filteredDishes = activeCategoryId === "all"
     ? dishes
     : dishes.filter(d => d.categoryId === activeCategoryId);
 
-  // Combined loading state
-  const isLoading = cafesLoading || (activeCafeId !== null && (menuLoading || combosLoading));
+  const handleDishClick = (dish: typeof dishes[0]) => { setSelectedDish(dish); setIsModalOpen(true); };
+  const handleCloseModal = () => { setIsModalOpen(false); setSelectedDish(null); };
+  const navigateToFortuneWheel = () => router.push("/FortuneWheel");
+
+  useEffect(() => {
+    const totalRotation = 360 * 6;
+    const duration = 10000;
+    let startTime: number | null = null;
+    let animationFrame: number;
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const animate = (time: number) => {
+      if (!startTime) startTime = time;
+      const elapsed = time - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = easeOutCubic(t);
+      rotation.current = totalRotation * eased;
+      if (imgRef.current) imgRef.current.style.transform = `rotate(${rotation.current}deg)`;
+
+      if (t < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      } else {
+        rotation.current = 0;
+        if (imgRef.current) imgRef.current.style.transform = `rotate(0deg)`;
+
+        setTimeout(() => requestAnimationFrame((t) => animate(t)), 60000);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, []);
 
   // Combined error state
   const error = cafesError || menuError || combosError || extrasError;
@@ -265,9 +306,18 @@ export default function Home() {
       <div className="absolute bg-[#A020F0] blur-[150px] opacity-40 rounded-full w-[80%] h-[60%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
 
       <div className="relative w-full md:w-[90%] min-h-[90vh] mx-auto bg-white/5 backdrop-blur-md border border-white/10 rounded-none md:rounded-2xl overflow-visible">
-        <div className="px-4 pt-6 md:px-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Food Delivery</h1>
-          <p className="text-gray-300 text-sm md:text-base">Выберите категорию и блюдо</p>
+        <div className="px-4 pt-6 md:px-6 flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-1">Food Delivery</h1>
+            <p className="text-gray-300 text-sm md:text-base">Выберите категорию и блюдо</p>
+          </div>
+
+          <button
+            onClick={navigateToFortuneWheel}
+            className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-[#8B23CB]/50 to-[#A020F0]/50 border border-white/20 backdrop-blur-md shadow-lg overflow-hidden"
+          >
+            <img ref={imgRef} src="/image.png" alt="Колесо фортуны" className="w-8 h-8 object-contain" />
+          </button>
         </div>
 
         {/* Error message */}
@@ -351,7 +401,13 @@ export default function Home() {
                   {dishes.length === 0 ? "Меню пока не добавлено" : "Нет блюд в этой категории"}
                 </div>
               ) : (
-                <MenuSection dishes={filteredDishes} cart={cart} addToCart={addToCart} removeFromCart={removeFromCart} />
+                <MenuSection
+                  dishes={filteredDishes}
+                  cart={cart}
+                  addToCart={addToCart}
+                  removeFromCart={removeFromCart}
+                  onDishClick={handleDishClick}
+                />
               )}
             </div>
 
@@ -375,37 +431,45 @@ export default function Home() {
         )}
       </div>
 
-     <div
-  style={{
-    position: "fixed",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 50,
-    padding: "16px",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)",
-    background: "rgba(255, 255, 255, 0.05)", 
-  }}
->
-  <div className="max-w-2xl mx-auto bg-[#7B6F9C]/30 border border-white/10 backdrop-blur-xl rounded-xl p-4 shadow-lg">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="relative">
-          <FaCartShopping className="text-white text-xl" />
-          {totalItems > 0 && (
-            <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gradient-to-br from-[#8B23CB] to-[#A020F0] text-white text-xs flex items-center justify-center font-bold">
-              {totalItems}
-            </span>
-          )}
+      <div style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          padding: "16px",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          background: "rgba(255, 255, 255, 0.05)",
+      }}>
+        <div className="max-w-2xl mx-auto bg-[#7B6F9C]/30 border border-white/10 backdrop-blur-xl rounded-xl p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <FaCartShopping className="text-white text-xl" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gradient-to-br from-[#8B23CB] to-[#A020F0] text-white text-xs flex items-center justify-center font-bold">
+                    {totalItems}
+                  </span>
+                )}
+              </div>
+              <CartSummary totalItems={totalItems} totalPrice={totalPrice} />
+            </div>
+            <CheckoutButton disabled={isCheckoutDisabled} onClick={() => router.push('/order')} />
+          </div>
         </div>
-        <CartSummary totalItems={totalItems} totalPrice={totalPrice} />
       </div>
-      <CheckoutButton disabled={isCheckoutDisabled} />
-    </div>
-  </div>
-</div>
 
+      {selectedDish && (
+        <DishModal
+          dish={selectedDish}
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          cart={cart}
+          addToCart={addToCart}
+          removeFromCart={removeFromCart}
+        />
+      )}
 
       <style jsx global>{`
         .scrollbar-hide {

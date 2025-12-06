@@ -1,0 +1,4 @@
+{
+  "permissions": ["geolocation"],
+  "display": "standalone"
+}
