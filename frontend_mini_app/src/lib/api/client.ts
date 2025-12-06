@@ -79,7 +79,12 @@ export async function apiRequest<T>(
         removeToken();
         throw new Error("Unauthorized. Please log in again.");
       } else if (response.status === 403) {
-        throw new Error("Access denied.");
+        // Forbidden - show alert and redirect to home
+        if (typeof window !== "undefined") {
+          alert("У вас нет доступа к этой функции");
+          window.location.href = "/";
+        }
+        throw new Error("Forbidden");
       } else if (response.status === 404) {
         throw new Error("Resource not found.");
       } else if (response.status >= 500) {

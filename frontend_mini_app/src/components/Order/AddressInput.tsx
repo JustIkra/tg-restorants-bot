@@ -5,7 +5,7 @@ interface AddressInputProps {
   address: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onManualSearch: () => void;
-  addressInputRef: React.RefObject<HTMLInputElement>;
+  addressInputRef: React.RefObject<HTMLInputElement | null>;
   isLoadingSuggestions: boolean;
   showSuggestions: boolean;
   addressSuggestions: {title: string, subtitle: string, fullAddress: string}[];

@@ -108,3 +108,19 @@ export interface OrderAvailabilityResponse {
   time_remaining: string | null;
   reason: string | null;
 }
+
+export interface CafeRequest {
+  id: number;
+  cafe_name: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+}
+
+export interface Summary {
+  id: number;
+  cafe_id: number;
+  cafe_name: string;
+  date: string;
+  status: "pending" | "completed";
+  created_at: string;
+}

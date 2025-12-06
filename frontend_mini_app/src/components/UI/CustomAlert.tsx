@@ -80,13 +80,15 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
   }, [duration, isVisible, isExiting]);
 
   useEffect(() => {
-    if (show && !isVisible) {
-      setIsVisible(true);
-      setIsExiting(false);
-    } else if (!show && isVisible) {
-      handleClose();
+    if (show !== isVisible) {
+      if (show) {
+        setIsVisible(true);
+        setIsExiting(false);
+      } else {
+        handleClose();
+      }
     }
-  }, [show]);
+  }, [show, isVisible]);
 
   if (!isVisible) return null;
 

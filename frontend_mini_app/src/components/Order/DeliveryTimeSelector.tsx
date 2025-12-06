@@ -7,7 +7,7 @@ interface DeliveryTimeSelectorProps {
   showTimeDropdown: boolean;
   setShowTimeDropdown: (value: boolean) => void;
   timeOptions: { value: string; label: string; icon: string }[];
-  timeDropdownRef: React.RefObject<HTMLDivElement>;
+  timeDropdownRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const DeliveryTimeSelector: React.FC<DeliveryTimeSelectorProps> = ({

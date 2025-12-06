@@ -69,32 +69,43 @@ export default function Home() {
     const inTelegram = isTelegramWebApp();
     setIsInTelegram(inTelegram);
 
-    if (inTelegram) {
-      // Initialize Telegram WebApp
-      initTelegramWebApp();
-
-      // Authenticate with backend
-      const initData = getTelegramInitData();
-      if (initData) {
-        authenticateWithTelegram(initData)
-          .then(() => {
-            setIsAuthenticated(true);
-            console.log("Telegram auth successful");
-          })
-          .catch(err => {
-            console.error("Telegram auth failed:", err);
-            const errorMessage = err instanceof Error
-              ? err.message
-              : typeof err === 'string'
-                ? err
-                : (err?.detail || err?.message || "Не удалось авторизоваться");
-            setAuthError(errorMessage);
-          });
-      } else {
-        setAuthError("Telegram initData недоступен");
-      }
+    if (!inTelegram) {
+      return;
     }
-  }, []);
+
+    // Initialize Telegram WebApp
+    initTelegramWebApp();
+
+    // Authenticate with backend
+    const initData = getTelegramInitData();
+    if (!initData) {
+      setAuthError("Telegram initData недоступен");
+      return;
+    }
+
+    authenticateWithTelegram(initData)
+      .then((response) => {
+        setIsAuthenticated(true);
+        console.log("Telegram auth successful");
+
+        // Save user object to localStorage
+        localStorage.setItem("user", JSON.stringify(response.user));
+
+        // Redirect manager to /manager page
+        if (response.user.role === "manager") {
+          router.push("/manager");
+        }
+      })
+      .catch(err => {
+        console.error("Telegram auth failed:", err);
+        const errorMessage = err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : (err?.detail || err?.message || "Не удалось авторизоваться");
+        setAuthError(errorMessage);
+      });
+  }, [router]);
 
   // Auto-select first cafe when data loads
   useEffect(() => {

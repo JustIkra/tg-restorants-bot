@@ -68,7 +68,11 @@ export async function getLocationByIP(): Promise<{lat: number, lon: number, city
     
     for (const provider of providers) {
       try {
-        const response = await fetch(provider, { timeout: 3000 });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+        const response = await fetch(provider, { signal: controller.signal });
+        clearTimeout(timeoutId);
         const data = await response.json();
         
         if (data.latitude && data.longitude) {

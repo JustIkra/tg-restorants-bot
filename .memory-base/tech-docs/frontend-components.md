@@ -24,7 +24,9 @@ Telegram Mini App for lunch ordering. Stack: Next.js 16, React 19, Tailwind CSS 
 frontend_mini_app/src/
 ├── app/
 │   ├── layout.tsx          # Root layout with Geist fonts
-│   ├── page.tsx            # Main page with order flow
+│   ├── page.tsx            # Main page with order flow (user role)
+│   ├── manager/
+│   │   └── page.tsx        # Manager admin panel (manager role)
 │   └── globals.css         # Tailwind + custom styles
 ├── lib/
 │   ├── api/
@@ -42,8 +44,18 @@ frontend_mini_app/src/
     │   └── MenuSection.tsx
     ├── ExtrasSection/
     │   └── ExtrasSection.tsx
-    └── Cart/
-        └── CheckoutButton.tsx
+    ├── Cart/
+    │   └── CheckoutButton.tsx
+    └── Manager/            # Manager-only components
+        ├── UserList.tsx
+        ├── UserForm.tsx
+        ├── CafeList.tsx
+        ├── CafeForm.tsx
+        ├── MenuManager.tsx
+        ├── ComboForm.tsx
+        ├── MenuItemForm.tsx
+        ├── RequestsList.tsx
+        └── ReportsList.tsx
 ```
 
 ---
@@ -810,6 +822,203 @@ npm run test:coverage # Coverage report
 
 ---
 
+## Manager Components
+
+Administrative interface components for managers.
+
+**Location:** `frontend_mini_app/src/components/Manager/`
+
+### Manager Page
+
+**Location:** `frontend_mini_app/src/app/manager/page.tsx`
+
+Main admin panel with tab-based navigation. Features:
+- Role-based access control (manager only)
+- Automatic redirect for non-managers to `/`
+- Horizontal scrollable tabs with gradient navigation
+- 5 main sections: Users, Cafes, Menu, Requests, Reports
+
+**Authentication Flow:**
+1. Initialize Telegram WebApp
+2. Authenticate via `authenticateWithTelegram()`
+3. Check `user.role === "manager"`
+4. Redirect non-managers to `/`
+5. Store user object in localStorage
+
+**Tabs:**
+- Users - User management
+- Cafes - Cafe management
+- Menu - Menu and combo management
+- Requests - Cafe connection requests
+- Reports - Order summaries and reports
+
+### UserList / UserForm
+
+**Components:**
+- `UserList.tsx` - Display and manage users
+- `UserForm.tsx` - Create new users
+
+**Features:**
+- List all users with status badges (Active/Blocked)
+- Toggle user access (block/unblock)
+- Delete users with confirmation
+- Create new users (name, telegram ID, office, role)
+- Role display (Manager/Employee)
+
+**Hooks:**
+- `useUsers()` - Fetch user list
+- `useCreateUser()` - Create new user
+- `useUpdateUserAccess()` - Toggle user access
+- `useDeleteUser()` - Delete user
+
+**UI States:**
+- Loading - Skeleton placeholders (3 items)
+- Error - Red error banner
+- Empty - "No users" message
+- Loaded - User cards with action buttons
+
+### CafeList / CafeForm
+
+**Components:**
+- `CafeList.tsx` - Display and manage cafes
+- `CafeForm.tsx` - Create/edit cafes
+
+**Features:**
+- List all cafes with status indicators
+- Create new cafes (name, description)
+- Edit existing cafes
+- Toggle cafe status (active/inactive)
+- Delete cafes with confirmation
+
+**Hooks:**
+- `useCafes(activeOnly: boolean)` - Fetch cafes
+- `useCreateCafe()` - Create cafe
+- `useUpdateCafe()` - Update cafe details
+- `useUpdateCafeStatus()` - Toggle active status
+- `useDeleteCafe()` - Delete cafe
+
+**Form Fields:**
+- Name (required)
+- Description (optional)
+
+### MenuManager / ComboForm / MenuItemForm
+
+**Components:**
+- `MenuManager.tsx` - Main menu management interface
+- `ComboForm.tsx` - Create/edit combo sets
+- `MenuItemForm.tsx` - Create/edit menu items
+
+**MenuManager Features:**
+- Cafe selector dropdown
+- Two sections: Combo sets and Menu items
+- Category grouping (Soup, Salad, Main, Extra)
+- Toggle availability for items and combos
+- Edit and delete functionality
+- Price display
+
+**ComboForm:**
+- Name input
+- Category multi-select (soup, salad, main, extra)
+- Price input
+- Create/Edit modes
+
+**MenuItemForm:**
+- Name input
+- Description input (optional)
+- Category select
+- Price input (optional for combo items)
+- Create/Edit modes
+
+**Hooks:**
+- `useCreateCombo()` - Create combo set
+- `useUpdateCombo()` - Update combo
+- `useDeleteCombo()` - Delete combo
+- `useCreateMenuItem()` - Create menu item
+- `useUpdateMenuItem()` - Update menu item
+- `useDeleteMenuItem()` - Delete menu item
+
+**Category Labels Mapping:**
+```typescript
+{
+  soup: "Первое",
+  salad: "Салат",
+  main: "Второе",
+  extra: "Дополнительно"
+}
+```
+
+### RequestsList
+
+**Component:** `RequestsList.tsx`
+
+**Features:**
+- Display cafe connection requests
+- Approve requests - converts request to active cafe
+- Reject requests with confirmation
+- Request details: cafe name, description, requester
+
+**Hooks:**
+- `useCafeRequests()` - Fetch pending requests
+- `useApproveCafeRequest()` - Approve request
+- `useRejectCafeRequest()` - Reject request
+
+**Request States:**
+- Pending - Awaiting manager action
+- Approved - Converted to active cafe
+- Rejected - Request denied
+
+### ReportsList
+
+**Component:** `ReportsList.tsx`
+
+**Features:**
+- View order summaries by cafe and date
+- Create new summaries
+- Delete summaries with confirmation
+- Summary details display
+
+**Hooks:**
+- `useSummaries()` - Fetch all summaries
+- `useCreateSummary()` - Create new summary
+- `useDeleteSummary()` - Delete summary
+
+**Summary Creation:**
+- Cafe selector
+- Date picker
+- Generates report for selected cafe and date
+
+### Common Manager Component Patterns
+
+**Loading States:**
+- Skeleton placeholders during data fetch
+- Spinner icons for actions in progress
+- Disabled buttons during operations
+
+**Error Handling:**
+- Red error banners for fetch errors
+- Alert dialogs for operation errors
+- Console error logging
+
+**Empty States:**
+- Centered gray text messages
+- Semi-transparent card backgrounds
+
+**Action Buttons:**
+- Purple gradient for primary actions (Create, Add)
+- Red tones for destructive actions (Delete, Block)
+- Green tones for positive actions (Activate, Approve)
+- Toggle icons for availability (FaToggleOn/FaToggleOff)
+
+**Confirmation Dialogs:**
+- Browser confirm() for destructive actions
+- Custom messages for context
+
+**Data Revalidation:**
+- SWR `mutate()` after successful operations
+- Automatic UI refresh on data changes
+
+---
+
 ## Design System
 
 ### Color Palette
@@ -868,6 +1077,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 
 ## API Integration Summary
 
+### User Endpoints
+
 | Endpoint | Hook | Purpose |
 |----------|------|---------|
 | `POST /auth/telegram` | `authenticateWithTelegram()` | Get JWT token |
@@ -876,6 +1087,54 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 | `GET /cafes/{id}/menu` | `useMenu(cafeId)` | Fetch menu items |
 | `GET /cafes/{id}/menu?category=extra` | `useMenu(cafeId, "extra")` | Fetch extras |
 | `POST /orders` | `useCreateOrder()` | Create new order |
+
+### Manager Endpoints
+
+**User Management:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `GET /users` | `useUsers()` | Fetch all users |
+| `POST /users` | `useCreateUser()` | Create new user |
+| `PATCH /users/{tgid}/access` | `useUpdateUserAccess()` | Toggle user access |
+| `DELETE /users/{tgid}` | `useDeleteUser()` | Delete user |
+
+**Cafe Management:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `GET /cafes` | `useCafes(false)` | Fetch all cafes (including inactive) |
+| `POST /cafes` | `useCreateCafe()` | Create new cafe |
+| `PATCH /cafes/{id}` | `useUpdateCafe()` | Update cafe details |
+| `PATCH /cafes/{id}/status` | `useUpdateCafeStatus()` | Toggle cafe status |
+| `DELETE /cafes/{id}` | `useDeleteCafe()` | Delete cafe |
+
+**Menu Management:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `POST /cafes/{id}/combos` | `useCreateCombo()` | Create combo set |
+| `PATCH /cafes/{id}/combos/{combo_id}` | `useUpdateCombo()` | Update combo |
+| `DELETE /cafes/{id}/combos/{combo_id}` | `useDeleteCombo()` | Delete combo |
+| `POST /cafes/{id}/menu` | `useCreateMenuItem()` | Create menu item |
+| `PATCH /cafes/{id}/menu/{item_id}` | `useUpdateMenuItem()` | Update menu item |
+| `DELETE /cafes/{id}/menu/{item_id}` | `useDeleteMenuItem()` | Delete menu item |
+
+**Cafe Requests:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `GET /cafe-requests` | `useCafeRequests()` | Fetch pending requests |
+| `POST /cafe-requests/{id}/approve` | `useApproveCafeRequest()` | Approve request |
+| `POST /cafe-requests/{id}/reject` | `useRejectCafeRequest()` | Reject request |
+
+**Reports:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `GET /summaries` | `useSummaries()` | Fetch all summaries |
+| `POST /summaries` | `useCreateSummary()` | Create summary |
+| `DELETE /summaries/{id}` | `useDeleteSummary()` | Delete summary |
 
 ---
 
