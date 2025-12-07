@@ -30,19 +30,29 @@ import ExtrasSection from "@/components/ExtrasSection/ExtrasSection";
 import CartSummary from "@/components/Cart/CartSummary";
 import CheckoutButton from "@/components/Cart/CheckoutButton";
 import TelegramFallback from "@/components/TelegramFallback/TelegramFallback";
+import AccessRequestForm from "@/components/AccessRequestForm/AccessRequestForm";
 import { useCafes, useMenu } from "@/lib/api/hooks";
 import { apiRequest, authenticateWithTelegram } from "@/lib/api/client";
-import { isTelegramWebApp, initTelegramWebApp, getTelegramInitData } from "@/lib/telegram/webapp";
+import { isTelegramWebApp, initTelegramWebApp, getTelegramInitData, getTelegramUser } from "@/lib/telegram/webapp";
+
+type AuthState = "loading" | "needs_request" | "success" | "pending" | "rejected" | "error";
 
 export default function Home() {
   const router = useRouter();
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>("loading");
   const [authError, setAuthError] = useState<string | null>(null);
   const [user, setUser] = useState<{ role: string } | null>(null);
+  const [telegramUserData, setTelegramUserData] = useState<{ name: string; username: string | null } | null>(null);
   const [activeCafeId, setActiveCafeId] = useState<number | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string | number>("all");
-  const [cart, setCart] = useState<{ [key: number]: number }>({});
+
+  interface CartItem {
+    quantity: number;
+    options?: Record<string, string>;
+  }
+
+  const [cart, setCart] = useState<{ [key: number]: CartItem }>({});
   const [selectedDish, setSelectedDish] = useState<{ id: number; name: string; description: string; price: number; categoryId: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [availableDays, setAvailableDays] = useState<
@@ -54,6 +64,8 @@ export default function Home() {
 
   const rotation = useRef(0);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  const isAuthenticated = authState === "success";
 
   // Fetch real data from API using SWR hooks (only after authentication)
   const { data: cafesData, error: cafesError, isLoading: cafesLoading } = useCafes(isAuthenticated, true);
@@ -78,21 +90,45 @@ export default function Home() {
     // Initialize Telegram WebApp
     initTelegramWebApp();
 
-    // Authenticate with backend
+    // Get Telegram user data
+    const telegramUser = getTelegramUser();
+    if (telegramUser) {
+      const fullName = `${telegramUser.first_name}${telegramUser.last_name ? ' ' + telegramUser.last_name : ''}`;
+      setTelegramUserData({
+        name: fullName,
+        username: telegramUser.username || null,
+      });
+    }
+
+    // Check if user has already sent access request
+    const hasRequestSent = localStorage.getItem("access_request_sent");
+    const hasToken = localStorage.getItem("jwt_token");
+
+    // If no token and no request sent, show form
+    if (!hasToken && !hasRequestSent) {
+      setAuthState("needs_request");
+      return;
+    }
+
+    // Otherwise, try to authenticate
     const initData = getTelegramInitData();
     if (!initData) {
       setAuthError("Telegram initData недоступен");
+      setAuthState("error");
       return;
     }
 
     authenticateWithTelegram(initData)
       .then((response) => {
-        setIsAuthenticated(true);
+        setAuthState("success");
         setUser(response.user);
         console.log("Telegram auth successful");
 
         // Save user object to localStorage
         localStorage.setItem("user", JSON.stringify(response.user));
+
+        // Clear access request flag on success
+        localStorage.removeItem("access_request_sent");
 
         // Manager can stay on main page - no automatic redirect
       })
@@ -103,7 +139,16 @@ export default function Home() {
           : typeof err === 'string'
             ? err
             : (err?.detail || err?.message || "Не удалось авторизоваться");
-        setAuthError(errorMessage);
+
+        // Parse error message to determine auth state
+        if (errorMessage.includes("Access request created") || errorMessage.includes("Access request pending")) {
+          setAuthState("pending");
+        } else if (errorMessage.includes("Access request rejected")) {
+          setAuthState("rejected");
+        } else {
+          setAuthState("error");
+          setAuthError(errorMessage);
+        }
       });
   }, [router]);
 
@@ -182,16 +227,24 @@ export default function Home() {
       setAvailabilityLoading(true);
       try {
         const week = await apiRequest<{
-          days: {
+          availability: {
             date: string;
-            weekday: string;
             can_order: boolean;
             deadline: string | null;
             reason: string | null;
           }[];
         }>(`/orders/availability/week?cafe_id=${activeCafeId}`);
 
-        const days = week?.days ?? [];
+        const days =
+          week?.availability?.map((item) => ({
+            date: item.date,
+            // Преобразуем дату в название дня недели для UI
+            weekday: new Date(item.date).toLocaleDateString("ru-RU", { weekday: "long" }),
+            can_order: item.can_order,
+            deadline: item.deadline,
+            reason: item.reason,
+          })) ?? [];
+
         setAvailableDays(days);
 
         const todayIso = new Date().toISOString().split("T")[0];
@@ -212,20 +265,33 @@ export default function Home() {
     void loadAvailability();
   }, [activeCafeId]);
 
-  const addToCart = (dishId: number) =>
-    setCart(prev => ({ ...prev, [dishId]: (prev[dishId] || 0) + 1 }));
+  const addToCart = (dishId: number, options?: Record<string, string>) =>
+    setCart(prev => ({
+      ...prev,
+      [dishId]: {
+        quantity: (prev[dishId]?.quantity || 0) + 1,
+        options: options || prev[dishId]?.options
+      }
+    }));
 
   const removeFromCart = (dishId: number) =>
     setCart(prev => {
-      const copy = { ...prev };
-      if (!copy[dishId]) return copy;
-      if (copy[dishId] > 1) copy[dishId]--;
-      else delete copy[dishId];
-      return copy;
+      const current = prev[dishId];
+      if (!current || current.quantity <= 1) {
+        const { [dishId]: _, ...rest } = prev;
+        return rest;
+      }
+      return {
+        ...prev,
+        [dishId]: { ...current, quantity: current.quantity - 1 }
+      };
     });
 
-  const totalItems = Object.values(cart).reduce((s, v) => s + v, 0);
-  const totalPrice = dishes.filter(d => !!cart[d.id]).reduce((sum, d) => sum + d.price * (cart[d.id] || 0), 0);
+  const totalItems = Object.values(cart).reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = Object.entries(cart).reduce((sum, [dishId, item]) => {
+    const dish = dishes.find(d => d.id === parseInt(dishId));
+    return sum + (dish?.price || 0) * item.quantity;
+  }, 0);
 
   const filteredDishes = activeCategoryId === "all"
     ? dishes
@@ -234,6 +300,28 @@ export default function Home() {
   const handleDishClick = (dish: typeof dishes[0]) => { setSelectedDish(dish); setIsModalOpen(true); };
   const handleCloseModal = () => { setIsModalOpen(false); setSelectedDish(null); };
   const navigateToFortuneWheel = () => router.push("/FortuneWheel");
+
+  const handleCheckout = () => {
+    // Save cart and metadata to localStorage for order page
+    localStorage.setItem("cart", JSON.stringify(cart));
+    localStorage.setItem("activeCafeId", activeCafeId?.toString() || "");
+    localStorage.setItem("selectedDate", selectedDate || "");
+    router.push("/order");
+  };
+
+  const handleAccessRequestSubmit = async (office: string) => {
+    const initData = getTelegramInitData();
+    if (!initData) {
+      throw new Error("Telegram initData недоступен");
+    }
+
+    await authenticateWithTelegram(initData, office);
+    localStorage.setItem("access_request_sent", "true");
+  };
+
+  const handleAccessRequestSuccess = () => {
+    setAuthState("pending");
+  };
 
   useEffect(() => {
     const totalRotation = 360 * 6;
@@ -271,6 +359,18 @@ export default function Home() {
   const noAvailableDates = !selectedDate && !availabilityLoading && availableDays.length > 0;
   const isCheckoutDisabled = totalItems === 0 || !selectedDate || availabilityLoading || noAvailableDates;
 
+  // DEBUG: Check why checkout is disabled
+  useEffect(() => {
+    console.log("Checkout Debug:", {
+      totalItems,
+      selectedDate,
+      availabilityLoading,
+      availableDays: availableDays.length,
+      noAvailableDates,
+      isCheckoutDisabled
+    });
+  }, [totalItems, selectedDate, availabilityLoading, availableDays, noAvailableDates, isCheckoutDisabled]);
+
   // Show loading while checking Telegram environment
   if (isInTelegram === null) {
     return (
@@ -286,7 +386,7 @@ export default function Home() {
   }
 
   // Show loading while authenticating
-  if (isInTelegram && !isAuthenticated && !authError) {
+  if (authState === "loading") {
     return (
       <div className="min-h-screen bg-[#130F30] flex items-center justify-center">
         <div className="text-center">
@@ -297,11 +397,82 @@ export default function Home() {
     );
   }
 
-  // Show error if auth failed
-  if (isInTelegram && authError) {
+  // Show access request form for new users
+  if (authState === "needs_request") {
+    if (!telegramUserData) {
+      return (
+        <div className="min-h-screen bg-[#130F30] flex items-center justify-center p-4">
+          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-6 max-w-md">
+            <FaTriangleExclamation className="text-red-400 text-4xl mx-auto mb-4" />
+            <h2 className="text-white text-xl font-bold mb-2">Ошибка</h2>
+            <p className="text-red-200">Не удалось получить данные Telegram</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <AccessRequestForm
+        name={telegramUserData.name}
+        username={telegramUserData.username}
+        onSubmit={handleAccessRequestSubmit}
+        onSuccess={handleAccessRequestSuccess}
+      />
+    );
+  }
+
+  // Show pending screen
+  if (authState === "pending") {
     return (
       <div className="min-h-screen bg-[#130F30] flex items-center justify-center p-4">
-        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-6 max-w-md">
+        <div className="absolute bg-[#A020F0] blur-[200px] opacity-40 rounded-full w-[120%] h-[50%] top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90" />
+        <div className="absolute bg-[#A020F0] blur-[150px] opacity-40 rounded-full w-[80%] h-[60%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+
+        <div className="relative bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 md:p-8 max-w-md text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-yellow-500 to-orange-500 flex items-center justify-center">
+            <FaSpinner className="text-white text-2xl animate-spin" />
+          </div>
+          <h2 className="text-white text-2xl font-bold mb-2">Ожидание одобрения</h2>
+          <p className="text-gray-300 text-sm mb-4">
+            Ваш запрос на доступ отправлен менеджеру. Пожалуйста, дождитесь одобрения.
+          </p>
+          <p className="text-gray-400 text-xs">
+            Вы получите уведомление, когда ваш запрос будет обработан.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show rejected screen
+  if (authState === "rejected") {
+    return (
+      <div className="min-h-screen bg-[#130F30] flex items-center justify-center p-4">
+        <div className="absolute bg-[#A020F0] blur-[200px] opacity-40 rounded-full w-[120%] h-[50%] top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90" />
+        <div className="absolute bg-[#A020F0] blur-[150px] opacity-40 rounded-full w-[80%] h-[60%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+
+        <div className="relative bg-red-500/20 border border-red-500/50 rounded-2xl p-6 md:p-8 max-w-md text-center">
+          <FaTriangleExclamation className="text-red-400 text-4xl mx-auto mb-4" />
+          <h2 className="text-white text-2xl font-bold mb-2">Доступ отклонён</h2>
+          <p className="text-red-200 text-sm mb-4">
+            К сожалению, ваш запрос на доступ был отклонён менеджером.
+          </p>
+          <p className="text-gray-400 text-xs">
+            Для получения дополнительной информации обратитесь к менеджеру.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if auth failed
+  if (authState === "error") {
+    return (
+      <div className="min-h-screen bg-[#130F30] flex items-center justify-center p-4">
+        <div className="absolute bg-[#A020F0] blur-[200px] opacity-40 rounded-full w-[120%] h-[50%] top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90" />
+        <div className="absolute bg-[#A020F0] blur-[150px] opacity-40 rounded-full w-[80%] h-[60%] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+
+        <div className="relative bg-red-500/20 border border-red-500/50 rounded-2xl p-6 md:p-8 max-w-md text-center">
           <FaTriangleExclamation className="text-red-400 text-4xl mx-auto mb-4" />
           <h2 className="text-white text-xl font-bold mb-2">Ошибка авторизации</h2>
           <p className="text-red-200">{authError}</p>
@@ -485,7 +656,7 @@ export default function Home() {
               </div>
               <CartSummary totalItems={totalItems} totalPrice={totalPrice} />
             </div>
-            <CheckoutButton disabled={isCheckoutDisabled} onClick={() => router.push('/order')} />
+            <CheckoutButton disabled={isCheckoutDisabled} onClick={handleCheckout} />
           </div>
         </div>
       </div>

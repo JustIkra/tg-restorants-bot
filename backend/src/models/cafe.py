@@ -61,11 +61,31 @@ class MenuItem(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     category: Mapped[str] = mapped_column(String(50), nullable=False)  # soup, salad, main, extra
-    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)  # only for extras
+    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)  # can be set for any category now
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
     cafe: Mapped["Cafe"] = relationship("Cafe", back_populates="menu_items")
+    options: Mapped[list["MenuItemOption"]] = relationship(
+        "MenuItemOption",
+        back_populates="menu_item",
+        cascade="all, delete-orphan"
+    )
+
+
+class MenuItemOption(Base):
+    """Options for menu items (e.g., size, spice level, toppings)."""
+
+    __tablename__ = "menu_item_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    menu_item_id: Mapped[int] = mapped_column(Integer, ForeignKey("menu_items.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "Размер порции"
+    values: Mapped[list[str]] = mapped_column(JSON, nullable=False)  # e.g., ["Стандарт", "Большая"]
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Relationship
+    menu_item: Mapped["MenuItem"] = relationship("MenuItem", back_populates="options")
 
 
 class CafeLinkRequest(Base, TimestampMixin):

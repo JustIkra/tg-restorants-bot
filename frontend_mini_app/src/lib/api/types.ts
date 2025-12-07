@@ -27,6 +27,14 @@ export interface Combo {
   is_available: boolean;
 }
 
+export interface MenuItemOption {
+  id: number;
+  menu_item_id: number;
+  name: string;
+  values: string[];
+  is_required: boolean;
+}
+
 export interface MenuItem {
   id: number;
   cafe_id: number;
@@ -35,6 +43,7 @@ export interface MenuItem {
   category: string;
   price: number | null;
   is_available: boolean;
+  options?: MenuItemOption[];
 }
 
 export interface OrderComboItem {
@@ -58,6 +67,28 @@ export interface OrderExtra {
   subtotal: number;
 }
 
+// Order items types
+export interface ComboItem {
+  type: "combo";
+  category: "soup" | "salad" | "main";
+  menu_item_id: number;
+}
+
+export interface StandaloneItem {
+  type: "standalone";
+  menu_item_id: number;
+  quantity: number;
+  options: Record<string, string>;
+}
+
+export type OrderItem = ComboItem | StandaloneItem;
+
+// Input types for extras
+export interface ExtraInput {
+  menu_item_id: number;
+  quantity: number;
+}
+
 export interface Order {
   id: number;
   user_tgid: number;
@@ -66,7 +97,9 @@ export interface Order {
   cafe_name: string;
   order_date: string;
   status: "pending" | "confirmed" | "cancelled";
-  combo: OrderCombo;
+  combo_id: number | null;
+  combo?: OrderCombo;
+  items: OrderItem[];
   extras: OrderExtra[];
   notes: string | null;
   total_price: number;
@@ -78,15 +111,9 @@ export interface Order {
 export interface CreateOrderRequest {
   cafe_id: number;
   order_date: string;
-  combo_id: number;
-  combo_items: {
-    category: string;
-    menu_item_id: number;
-  }[];
-  extras?: {
-    menu_item_id: number;
-    quantity: number;
-  }[];
+  combo_id: number | null;
+  items: OrderItem[];
+  extras?: ExtraInput[];
   notes?: string;
 }
 
@@ -138,4 +165,43 @@ export interface RecommendationsResponse {
   tips: string[];
   stats: OrderStats;
   generated_at: string | null;
+}
+
+// User Access Request types
+export type UserAccessRequestStatus = "pending" | "approved" | "rejected";
+
+export interface UserAccessRequest {
+  id: number;
+  tgid: number;
+  name: string;
+  office: string;
+  username: string | null;
+  status: UserAccessRequestStatus;
+  processed_at: string | null;
+  created_at: string;
+}
+
+export interface UserAccessRequestListResponse {
+  items: UserAccessRequest[];
+  total?: number;
+}
+
+// User update request
+export interface UserUpdate {
+  name?: string;
+  office?: string;
+  role?: "user" | "manager";
+}
+
+// Deadlines
+export interface DeadlineItem {
+  weekday: number;          // 0=Mon, 1=Tue, ..., 6=Sun
+  deadline_time: string;    // "10:00"
+  is_enabled: boolean;
+  advance_days: number;
+}
+
+export interface DeadlineScheduleResponse {
+  cafe_id: number;
+  schedule: DeadlineItem[];
 }

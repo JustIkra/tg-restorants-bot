@@ -57,7 +57,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 {"category": "main", "menu_item_id": test_menu_items[1].id},
                 {"category": "salad", "menu_item_id": test_menu_items[2].id},
@@ -154,7 +154,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
             ],
             total_price=Decimal("10.00"),
@@ -199,7 +199,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
             ],
             total_price=Decimal("10.00"),
@@ -267,7 +267,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
             ],
             total_price=Decimal("15.00"),
@@ -278,7 +278,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "main", "menu_item_id": test_menu_items[1].id},
             ],
             total_price=Decimal("20.00"),
@@ -328,7 +328,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
             ],
             total_price=Decimal("10.00"),
@@ -404,7 +404,7 @@ class TestKafkaNotificationsWorker:
             order_date=order_date,
             status="pending",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
             ],
             total_price=Decimal("10.00"),

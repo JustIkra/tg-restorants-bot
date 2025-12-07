@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { mutate } from "swr";
 import {
   FaSpinner,
   FaTriangleExclamation,
@@ -14,6 +15,7 @@ import {
   FaChevronRight,
   FaCartShopping,
   FaWallet,
+  FaCalendar,
 } from "react-icons/fa6";
 
 import { authenticateWithTelegram } from "@/lib/api/client";
@@ -27,18 +29,22 @@ import {
   useCreateUser,
   useUpdateUserAccess,
   useDeleteUser,
+  useUpdateUser,
 } from "@/lib/api/hooks";
-import type { Cafe } from "@/lib/api/types";
+import type { Cafe, User } from "@/lib/api/types";
 import UserList from "@/components/Manager/UserList";
 import UserForm from "@/components/Manager/UserForm";
+import UserRequestsList from "@/components/Manager/UserRequestsList";
+import UserEditModal from "@/components/Manager/UserEditModal";
 import CafeList from "@/components/Manager/CafeList";
 import CafeForm from "@/components/Manager/CafeForm";
 import MenuManager from "@/components/Manager/MenuManager";
 import RequestsList from "@/components/Manager/RequestsList";
 import ReportsList from "@/components/Manager/ReportsList";
 import BalanceManager from "@/components/Manager/BalanceManager";
+import DeadlineSchedule from "@/components/Manager/DeadlineSchedule";
 
-type TabId = "users" | "balances" | "cafes" | "menu" | "requests" | "reports";
+type TabId = "users" | "user-requests" | "balances" | "cafes" | "menu" | "requests" | "reports" | "deadlines";
 
 interface Tab {
   id: TabId;
@@ -48,11 +54,13 @@ interface Tab {
 
 const tabs: Tab[] = [
   { id: "users", name: "Пользователи", icon: <FaUsers /> },
+  { id: "user-requests", name: "Запросы доступа", icon: <FaEnvelope /> },
   { id: "balances", name: "Балансы", icon: <FaWallet /> },
   { id: "cafes", name: "Кафе", icon: <FaStore /> },
   { id: "menu", name: "Меню", icon: <FaUtensils /> },
-  { id: "requests", name: "Запросы", icon: <FaEnvelope /> },
+  { id: "requests", name: "Кафе запросы", icon: <FaEnvelope /> },
   { id: "reports", name: "Отчёты", icon: <FaChartBar /> },
+  { id: "deadlines", name: "Расписание", icon: <FaCalendar /> },
 ];
 
 export default function ManagerPage() {
@@ -67,10 +75,12 @@ export default function ManagerPage() {
 
   // Users tab state
   const [showUserForm, setShowUserForm] = useState(false);
-  const { data: users, error: usersError, isLoading: usersLoading } = useUsers();
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const { data: users, error: usersError, isLoading: usersLoading } = useUsers(isAuthenticated);
   const { createUser } = useCreateUser();
   const { updateAccess } = useUpdateUserAccess();
   const { deleteUser } = useDeleteUser();
+  const { updateUser } = useUpdateUser();
 
   // Cafes tab state
   const [showCafeForm, setShowCafeForm] = useState(false);
@@ -96,7 +106,7 @@ export default function ManagerPage() {
     }
 
     authenticateWithTelegram(initData)
-      .then((response) => {
+      .then(async (response) => {
         // Check if user is manager
         if (response.user.role !== "manager") {
           // Redirect non-managers to main page
@@ -110,6 +120,11 @@ export default function ManagerPage() {
         }
 
         setIsAuthenticated(true);
+
+        // Revalidate all SWR caches after successful authentication
+        // This ensures that any requests made before auth are retried
+        await mutate(() => true, undefined, { revalidate: true });
+
         console.log("Manager authenticated successfully");
       })
       .catch((err) => {
@@ -333,6 +348,9 @@ export default function ManagerPage() {
                     console.error("Failed to toggle access:", err);
                   }
                 }}
+                onEdit={(user) => {
+                  setEditingUser(user);
+                }}
                 onDelete={async (tgid) => {
                   try {
                     await deleteUser(tgid);
@@ -341,6 +359,32 @@ export default function ManagerPage() {
                   }
                 }}
               />
+
+              {/* User Edit Modal */}
+              {editingUser && (
+                <UserEditModal
+                  user={editingUser}
+                  onSubmit={async (data) => {
+                    try {
+                      await updateUser(editingUser.tgid, data);
+                      setEditingUser(null);
+                    } catch (err) {
+                      console.error("Failed to update user:", err);
+                      throw err;
+                    }
+                  }}
+                  onClose={() => setEditingUser(null)}
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === "user-requests" && (
+            <div className="text-white space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-bold">Запросы на доступ</h2>
+              </div>
+              <UserRequestsList />
             </div>
           )}
 
@@ -381,6 +425,7 @@ export default function ManagerPage() {
               )}
 
               <CafeList
+                shouldFetch={isAuthenticated}
                 onEdit={(cafe) => {
                   setEditingCafe(cafe);
                   setShowCafeForm(false);
@@ -404,6 +449,12 @@ export default function ManagerPage() {
           {activeTab === "reports" && (
             <div className="text-white">
               <ReportsList />
+            </div>
+          )}
+
+          {activeTab === "deadlines" && (
+            <div className="text-white">
+              <DeadlineSchedule />
             </div>
           )}
         </div>

@@ -8,6 +8,7 @@ from ..database import get_db
 from ..schemas.menu import (
     ComboCreate, ComboResponse, ComboUpdate,
     MenuItemCreate, MenuItemResponse, MenuItemUpdate,
+    MenuItemOptionCreate, MenuItemOptionResponse, MenuItemOptionUpdate,
 )
 from ..services.menu import MenuService
 
@@ -100,3 +101,56 @@ async def delete_menu_item(
     service: Annotated[MenuService, Depends(get_menu_service)],
 ):
     await service.delete_menu_item(cafe_id, item_id)
+
+
+# MenuItemOption endpoints
+@router.get("/cafes/{cafe_id}/menu/{item_id}/options", response_model=list[MenuItemOptionResponse])
+async def list_menu_item_options(
+    cafe_id: int,
+    item_id: int,
+    current_user: CurrentUser,
+    service: Annotated[MenuService, Depends(get_menu_service)],
+):
+    """Получить список опций для блюда"""
+    # Проверить что item существует и принадлежит cafe
+    item = await service.get_menu_item(item_id)
+    if item.cafe_id != cafe_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
+    return await service.list_menu_item_options(item_id)
+
+
+@router.post("/cafes/{cafe_id}/menu/{item_id}/options", response_model=MenuItemOptionResponse, status_code=201)
+async def create_menu_item_option(
+    cafe_id: int,
+    item_id: int,
+    data: MenuItemOptionCreate,
+    manager: ManagerUser,
+    service: Annotated[MenuService, Depends(get_menu_service)],
+):
+    """Создать опцию для блюда"""
+    return await service.create_menu_item_option(cafe_id, item_id, data)
+
+
+@router.patch("/cafes/{cafe_id}/menu/{item_id}/options/{option_id}", response_model=MenuItemOptionResponse)
+async def update_menu_item_option(
+    cafe_id: int,
+    item_id: int,
+    option_id: int,
+    data: MenuItemOptionUpdate,
+    manager: ManagerUser,
+    service: Annotated[MenuService, Depends(get_menu_service)],
+):
+    """Обновить опцию"""
+    return await service.update_menu_item_option(cafe_id, item_id, option_id, data)
+
+
+@router.delete("/cafes/{cafe_id}/menu/{item_id}/options/{option_id}", status_code=204)
+async def delete_menu_item_option(
+    cafe_id: int,
+    item_id: int,
+    option_id: int,
+    manager: ManagerUser,
+    service: Annotated[MenuService, Depends(get_menu_service)],
+):
+    """Удалить опцию"""
+    await service.delete_menu_item_option(cafe_id, item_id, option_id)

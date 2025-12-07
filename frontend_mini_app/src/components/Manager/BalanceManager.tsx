@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FaWallet, FaEdit, FaTimes, FaCheck, FaSpinner } from "react-icons/fa";
 import { User } from "@/lib/api/types";
 import { useUsers, useUserBalance, useUpdateBalanceLimit } from "@/lib/api/hooks";
+import { useConfirm } from "@/hooks/useConfirm";
 
 interface UserBalanceRowProps {
   user: User;
@@ -84,6 +85,7 @@ function UserBalanceRow({ user, onEdit }: UserBalanceRowProps) {
 }
 
 export default function BalanceManager() {
+  const { confirm } = useConfirm();
   const { data: users, isLoading, error } = useUsers();
   const { updateLimit } = useUpdateBalanceLimit();
 
@@ -122,7 +124,14 @@ export default function BalanceManager() {
   const handleRemoveLimit = async () => {
     if (!editingUser) return;
 
-    if (!confirm(`Снять лимит для пользователя ${editingUser.name}?`)) {
+    const confirmed = await confirm({
+      title: "Снятие лимита",
+      message: `Снять лимит для пользователя ${editingUser.name}?`,
+      confirmText: "Снять",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) {
       return;
     }
 

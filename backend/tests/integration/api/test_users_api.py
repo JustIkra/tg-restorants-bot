@@ -121,3 +121,66 @@ async def test_update_balance_limit_manager(client, manager_auth_headers, test_u
     assert response.status_code == 200
     data = response.json()
     assert float(data["weekly_limit"]) == 2000.00
+
+
+@pytest.mark.asyncio
+async def test_update_user_name(client, manager_auth_headers, test_user):
+    """Test PATCH /users/{tgid} changes user name."""
+    update_data = {"name": "Updated Name"}
+
+    response = await client.patch(
+        f"/api/v1/users/{test_user.tgid}",
+        headers=manager_auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["office"] == test_user.office  # Other fields unchanged
+
+
+@pytest.mark.asyncio
+async def test_update_user_role(client, manager_auth_headers, test_user):
+    """Test PATCH /users/{tgid} changes user role."""
+    update_data = {"role": "manager"}
+
+    response = await client.patch(
+        f"/api/v1/users/{test_user.tgid}",
+        headers=manager_auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["role"] == "manager"
+
+
+@pytest.mark.asyncio
+async def test_update_user_office(client, manager_auth_headers, test_user):
+    """Test PATCH /users/{tgid} changes user office."""
+    update_data = {"office": "New Office"}
+
+    response = await client.patch(
+        f"/api/v1/users/{test_user.tgid}",
+        headers=manager_auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["office"] == "New Office"
+
+
+@pytest.mark.asyncio
+async def test_update_nonexistent_user_fails(client, manager_auth_headers):
+    """Test PATCH /users/{tgid} returns 404 for non-existent user."""
+    update_data = {"name": "Should Fail"}
+
+    response = await client.patch(
+        "/api/v1/users/999999999",
+        headers=manager_auth_headers,
+        json=update_data,
+    )
+
+    assert response.status_code == 404

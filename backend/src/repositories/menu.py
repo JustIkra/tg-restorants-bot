@@ -1,11 +1,13 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from ..models import Combo, MenuItem
+from ..models import Combo, MenuItem, MenuItemOption
 
 # Whitelists of fields that can be updated via repository
-ALLOWED_COMBO_UPDATE_FIELDS = {"name", "categories", "price", "is_available"}
-ALLOWED_MENU_ITEM_UPDATE_FIELDS = {"name", "description", "category", "price", "is_available"}
+ALLOWED_COMBO_UPDATE_FIELDS: set[str] = {"name", "categories", "price", "is_available"}
+ALLOWED_MENU_ITEM_UPDATE_FIELDS: set[str] = {"name", "description", "category", "price", "is_available"}
+ALLOWED_MENU_ITEM_OPTION_UPDATE_FIELDS: set[str] = {"name", "values", "is_required"}
 
 
 class ComboRepository:
@@ -55,7 +57,7 @@ class MenuItemRepository:
 
     async def get(self, item_id: int) -> MenuItem | None:
         result = await self.session.execute(
-            select(MenuItem).where(MenuItem.id == item_id)
+            select(MenuItem).options(selectinload(MenuItem.options)).where(MenuItem.id == item_id)
         )
         return result.scalar_one_or_none()
 
@@ -65,7 +67,7 @@ class MenuItemRepository:
         category: str | None = None,
         available_only: bool = False,
     ) -> list[MenuItem]:
-        query = select(MenuItem).where(MenuItem.cafe_id == cafe_id)
+        query = select(MenuItem).options(selectinload(MenuItem.options)).where(MenuItem.cafe_id == cafe_id)
         if category:
             query = query.where(MenuItem.category == category)
         if available_only:
@@ -77,6 +79,7 @@ class MenuItemRepository:
         item = MenuItem(cafe_id=cafe_id, **kwargs)
         self.session.add(item)
         await self.session.flush()
+        await self.session.refresh(item, ["options"])
         return item
 
     async def update(self, item: MenuItem, **kwargs) -> MenuItem:
@@ -90,4 +93,42 @@ class MenuItemRepository:
 
     async def delete(self, item: MenuItem) -> None:
         await self.session.delete(item)
+        await self.session.flush()
+
+
+class MenuItemOptionRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get(self, option_id: int) -> MenuItemOption | None:
+        result = await self.session.execute(
+            select(MenuItemOption).where(MenuItemOption.id == option_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_by_menu_item(self, menu_item_id: int) -> list[MenuItemOption]:
+        result = await self.session.execute(
+            select(MenuItemOption)
+            .where(MenuItemOption.menu_item_id == menu_item_id)
+            .order_by(MenuItemOption.id)
+        )
+        return list(result.scalars().all())
+
+    async def create(self, menu_item_id: int, **kwargs) -> MenuItemOption:
+        option = MenuItemOption(menu_item_id=menu_item_id, **kwargs)
+        self.session.add(option)
+        await self.session.flush()
+        return option
+
+    async def update(self, option: MenuItemOption, **kwargs) -> MenuItemOption:
+        for key, value in kwargs.items():
+            if key not in ALLOWED_MENU_ITEM_OPTION_UPDATE_FIELDS:
+                raise ValueError(f"Field '{key}' cannot be updated")
+            if value is not None:
+                setattr(option, key, value)
+        await self.session.flush()
+        return option
+
+    async def delete(self, option: MenuItemOption) -> None:
+        await self.session.delete(option)
         await self.session.flush()

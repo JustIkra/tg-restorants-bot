@@ -1,6 +1,6 @@
 // API client with JWT authentication
 
-import type { User } from "./types";
+import type { User, MenuItemOption } from "./types";
 
 // API base URL from environment or default to localhost
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -117,13 +117,17 @@ export async function apiRequest<T>(
  * Authenticate with Telegram WebApp initData
  */
 export async function authenticateWithTelegram(
-  initData: string
+  initData: string,
+  office?: string
 ): Promise<{ access_token: string; user: User }> {
   const response = await apiRequest<{ access_token: string; user: User }>(
     "/auth/telegram",
     {
       method: "POST",
-      body: JSON.stringify({ init_data: initData }),
+      body: JSON.stringify({
+        init_data: initData,
+        ...(office && { office })
+      }),
     }
   );
 
@@ -131,4 +135,123 @@ export async function authenticateWithTelegram(
   setToken(response.access_token);
 
   return response;
+}
+
+/**
+ * Get all options for a menu item
+ */
+export async function getMenuItemOptions(
+  cafeId: number,
+  itemId: number
+): Promise<MenuItemOption[]> {
+  return await apiRequest<MenuItemOption[]>(
+    `/cafes/${cafeId}/menu/${itemId}/options`
+  );
+}
+
+/**
+ * Create a new menu item option (manager only)
+ */
+export async function createMenuItemOption(
+  cafeId: number,
+  itemId: number,
+  data: { name: string; values: string[]; is_required: boolean }
+): Promise<MenuItemOption> {
+  return await apiRequest<MenuItemOption>(
+    `/cafes/${cafeId}/menu/${itemId}/options`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+/**
+ * Update a menu item option (manager only)
+ */
+export async function updateMenuItemOption(
+  cafeId: number,
+  itemId: number,
+  optionId: number,
+  data: Partial<{ name: string; values: string[]; is_required: boolean }>
+): Promise<MenuItemOption> {
+  return await apiRequest<MenuItemOption>(
+    `/cafes/${cafeId}/menu/${itemId}/options/${optionId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }
+  );
+}
+
+/**
+ * Delete a menu item option (manager only)
+ */
+export async function deleteMenuItemOption(
+  cafeId: number,
+  itemId: number,
+  optionId: number
+): Promise<void> {
+  return await apiRequest<void>(
+    `/cafes/${cafeId}/menu/${itemId}/options/${optionId}`,
+    {
+      method: "DELETE",
+    }
+  );
+}
+
+/**
+ * Get user access requests (manager only)
+ */
+export async function getUserRequests(
+  status?: "pending" | "approved" | "rejected"
+): Promise<import("./types").UserAccessRequestListResponse> {
+  const params = status ? `?status=${status}` : "";
+  return await apiRequest<import("./types").UserAccessRequestListResponse>(
+    `/user-requests${params}`
+  );
+}
+
+/**
+ * Approve user access request (manager only)
+ */
+export async function approveUserRequest(
+  requestId: number
+): Promise<import("./types").UserAccessRequest> {
+  return await apiRequest<import("./types").UserAccessRequest>(
+    `/user-requests/${requestId}/approve`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+/**
+ * Reject user access request (manager only)
+ */
+export async function rejectUserRequest(
+  requestId: number
+): Promise<import("./types").UserAccessRequest> {
+  return await apiRequest<import("./types").UserAccessRequest>(
+    `/user-requests/${requestId}/reject`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+/**
+ * Update user details (manager only)
+ */
+export async function updateUser(
+  tgid: number,
+  data: import("./types").UserUpdate
+): Promise<import("./types").User> {
+  return await apiRequest<import("./types").User>(
+    `/users/${tgid}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }
+  );
 }

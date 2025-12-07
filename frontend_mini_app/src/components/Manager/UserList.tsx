@@ -2,12 +2,14 @@
 
 import React from "react";
 import type { User } from "@/lib/api/types";
+import { useConfirm } from "@/hooks/useConfirm";
 
 interface UserListProps {
   users: User[] | undefined;
   isLoading: boolean;
   error: Error | undefined;
   onToggleAccess: (tgid: number, newStatus: boolean) => Promise<void>;
+  onEdit: (user: User) => void;
   onDelete: (tgid: number) => Promise<void>;
 }
 
@@ -16,8 +18,10 @@ const UserList: React.FC<UserListProps> = ({
   isLoading,
   error,
   onToggleAccess,
+  onEdit,
   onDelete,
 }) => {
+  const { confirm } = useConfirm();
   const [actionLoading, setActionLoading] = React.useState<{
     [key: number]: "toggle" | "delete" | null;
   }>({});
@@ -32,9 +36,17 @@ const UserList: React.FC<UserListProps> = ({
   };
 
   const handleDelete = async (tgid: number) => {
-    if (!confirm("Вы уверены, что хотите удалить этого пользователя?")) {
+    const confirmed = await confirm({
+      title: "Удаление пользователя",
+      message: "Вы уверены, что хотите удалить этого пользователя?",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) {
       return;
     }
+
     setActionLoading((prev) => ({ ...prev, [tgid]: "delete" }));
     try {
       await onDelete(tgid);
@@ -120,12 +132,20 @@ const UserList: React.FC<UserListProps> = ({
 
               <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
                 <button
+                  onClick={() => onEdit(user)}
+                  disabled={!!loading}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/40 text-blue-300 border border-blue-500/50 hover:bg-blue-500/60 hover:border-blue-500/70 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
+                >
+                  Изменить
+                </button>
+
+                <button
                   onClick={() => handleToggleAccess(user.tgid, user.is_active)}
-                  disabled={loading !== null}
+                  disabled={!!loading}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 min-w-[120px] ${
                     user.is_active
-                      ? "bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500/50"
-                      : "bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 hover:border-green-500/50"
+                      ? "bg-red-500/40 text-red-300 border border-red-500/50 hover:bg-red-500/60 hover:border-red-500/70"
+                      : "bg-green-500/40 text-green-300 border border-green-500/50 hover:bg-green-500/60 hover:border-green-500/70"
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {loading === "toggle" ? (
@@ -160,8 +180,8 @@ const UserList: React.FC<UserListProps> = ({
 
                 <button
                   onClick={() => handleDelete(user.tgid)}
-                  disabled={loading !== null}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 hover:border-red-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
+                  disabled={!!loading}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/40 text-red-300 border border-red-500/50 hover:bg-red-500/60 hover:border-red-500/70 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
                 >
                   {loading === "delete" ? (
                     <span className="flex items-center justify-center gap-2">

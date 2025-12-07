@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useCafes, useCombos, useMenu, useCreateCombo, useUpdateCombo, useDeleteCombo, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem } from "@/lib/api/hooks";
 import { Combo, MenuItem } from "@/lib/api/types";
-import { FaPlus, FaEdit, FaTrash, FaSpinner, FaToggleOn, FaToggleOff } from "react-icons/fa";
+import { FaPlus, FaSpinner } from "react-icons/fa";
 import ComboForm from "./ComboForm";
 import MenuItemForm from "./MenuItemForm";
+import { useConfirm } from "@/hooks/useConfirm";
+import { useAlert } from "@/components/UI/CustomAlert";
 
 const CATEGORY_LABELS: Record<string, string> = {
   soup: "Первое",
@@ -15,6 +17,8 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function MenuManager() {
+  const { confirm } = useConfirm();
+  const { showAlert, AlertComponent } = useAlert();
   const [selectedCafeId, setSelectedCafeId] = useState<number | null>(null);
   const [showComboForm, setShowComboForm] = useState(false);
   const [showMenuItemForm, setShowMenuItemForm] = useState(false);
@@ -22,8 +26,8 @@ export default function MenuManager() {
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
 
   const { data: cafes, isLoading: cafesLoading } = useCafes(true, false);
-  const { data: combos, isLoading: combosLoading, mutate: mutateCombos } = useCombos(selectedCafeId);
-  const { data: menuItems, isLoading: menuLoading, mutate: mutateMenu } = useMenu(selectedCafeId);
+  const { data: combos, isLoading: combosLoading, mutate: mutateCombos } = useCombos(selectedCafeId, false);
+  const { data: menuItems, isLoading: menuLoading, mutate: mutateMenu } = useMenu(selectedCafeId, undefined, false);
 
   const { createCombo } = useCreateCombo();
   const { updateCombo } = useUpdateCombo();
@@ -40,7 +44,7 @@ export default function MenuManager() {
       mutateCombos();
       setShowComboForm(false);
     } catch (error) {
-      alert("Ошибка при создании комбо");
+      showAlert("Ошибка при создании комбо", "error");
       console.error(error);
     }
   };
@@ -52,19 +56,28 @@ export default function MenuManager() {
       mutateCombos();
       setEditingCombo(null);
     } catch (error) {
-      alert("Ошибка при обновлении комбо");
+      showAlert("Ошибка при обновлении комбо", "error");
       console.error(error);
     }
   };
 
   const handleDeleteCombo = async (comboId: number) => {
     if (!selectedCafeId) return;
-    if (!confirm("Удалить комбо?")) return;
+
+    const confirmed = await confirm({
+      title: "Удаление комбо",
+      message: "Вы уверены, что хотите удалить это комбо?",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) return;
+
     try {
       await deleteCombo(selectedCafeId, comboId);
       mutateCombos();
     } catch (error) {
-      alert("Ошибка при удалении комбо");
+      showAlert("Ошибка при удалении комбо", "error");
       console.error(error);
     }
   };
@@ -75,7 +88,7 @@ export default function MenuManager() {
       await updateCombo(selectedCafeId, combo.id, { is_available: !combo.is_available });
       mutateCombos();
     } catch (error) {
-      alert("Ошибка при изменении доступности");
+      showAlert("Ошибка при изменении доступности", "error");
       console.error(error);
     }
   };
@@ -94,7 +107,7 @@ export default function MenuManager() {
       mutateMenu();
       setShowMenuItemForm(false);
     } catch (error) {
-      alert("Ошибка при создании блюда");
+      showAlert("Ошибка при создании блюда", "error");
       console.error(error);
     }
   };
@@ -112,19 +125,28 @@ export default function MenuManager() {
       mutateMenu();
       setEditingMenuItem(null);
     } catch (error) {
-      alert("Ошибка при обновлении блюда");
+      showAlert("Ошибка при обновлении блюда", "error");
       console.error(error);
     }
   };
 
   const handleDeleteMenuItem = async (itemId: number) => {
     if (!selectedCafeId) return;
-    if (!confirm("Удалить блюдо?")) return;
+
+    const confirmed = await confirm({
+      title: "Удаление блюда",
+      message: "Вы уверены, что хотите удалить это блюдо?",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) return;
+
     try {
       await deleteMenuItem(selectedCafeId, itemId);
       mutateMenu();
     } catch (error) {
-      alert("Ошибка при удалении блюда");
+      showAlert("Ошибка при удалении блюда", "error");
       console.error(error);
     }
   };
@@ -135,7 +157,7 @@ export default function MenuManager() {
       await updateMenuItem(selectedCafeId, item.id, { is_available: !item.is_available });
       mutateMenu();
     } catch (error) {
-      alert("Ошибка при изменении доступности");
+      showAlert("Ошибка при изменении доступности", "error");
       console.error(error);
     }
   };
@@ -150,9 +172,11 @@ export default function MenuManager() {
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    <div className="space-y-6">
-      {/* Cafe selector */}
-      <div>
+    <>
+      <AlertComponent />
+      <div className="space-y-6">
+        {/* Cafe selector */}
+        <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
           Выберите кафе
         </label>
@@ -197,7 +221,18 @@ export default function MenuManager() {
                     className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4 flex justify-between items-start"
                   >
                     <div className="flex-1">
-                      <h4 className="text-white font-semibold">{combo.name}</h4>
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="text-white font-semibold">{combo.name}</h4>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            combo.is_available
+                              ? "bg-green-500/20 text-green-400"
+                              : "bg-red-500/20 text-red-400"
+                          }`}
+                        >
+                          {combo.is_available ? "Доступно" : "Недоступно"}
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-2 mt-2">
                         {combo.categories.map(cat => (
                           <span
@@ -210,29 +245,28 @@ export default function MenuManager() {
                       </div>
                       <p className="text-[#A020F0] font-semibold mt-2">{combo.price} ₽</p>
                     </div>
-                    <div className="flex items-center space-x-2 ml-4">
-                      <button
-                        onClick={() => handleToggleComboAvailability(combo)}
-                        className="text-gray-400 hover:text-white transition"
-                        title={combo.is_available ? "Отключить" : "Включить"}
-                      >
-                        {combo.is_available ? (
-                          <FaToggleOn size={24} className="text-green-500" />
-                        ) : (
-                          <FaToggleOff size={24} className="text-gray-500" />
-                        )}
-                      </button>
+                    <div className="flex flex-col gap-2 ml-4 flex-shrink-0">
                       <button
                         onClick={() => setEditingCombo(combo)}
-                        className="text-gray-400 hover:text-white transition"
+                        className="px-3 py-1.5 text-sm rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 active:bg-blue-500/40 disabled:opacity-50"
                       >
-                        <FaEdit size={20} />
+                        Редактировать
+                      </button>
+                      <button
+                        onClick={() => handleToggleComboAvailability(combo)}
+                        className={`px-3 py-1.5 text-sm rounded-lg disabled:opacity-50 ${
+                          combo.is_available
+                            ? "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 active:bg-yellow-500/40"
+                            : "bg-green-500/20 text-green-400 hover:bg-green-500/30 active:bg-green-500/40"
+                        }`}
+                      >
+                        {combo.is_available ? "Деактивировать" : "Активировать"}
                       </button>
                       <button
                         onClick={() => handleDeleteCombo(combo.id)}
-                        className="text-gray-400 hover:text-red-500 transition"
+                        className="px-3 py-1.5 text-sm rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 active:bg-red-500/40 disabled:opacity-50"
                       >
-                        <FaTrash size={20} />
+                        Удалить
                       </button>
                     </div>
                   </div>
@@ -274,7 +308,18 @@ export default function MenuManager() {
                           className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4 flex justify-between items-start"
                         >
                           <div className="flex-1">
-                            <h5 className="text-white font-semibold">{item.name}</h5>
+                            <div className="flex items-center gap-3 mb-1">
+                              <h5 className="text-white font-semibold">{item.name}</h5>
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  item.is_available
+                                    ? "bg-green-500/20 text-green-400"
+                                    : "bg-red-500/20 text-red-400"
+                                }`}
+                              >
+                                {item.is_available ? "Доступно" : "Недоступно"}
+                              </span>
+                            </div>
                             {item.description && (
                               <p className="text-gray-400 text-sm mt-1">{item.description}</p>
                             )}
@@ -282,29 +327,28 @@ export default function MenuManager() {
                               <p className="text-[#A020F0] font-semibold mt-2">{item.price} ₽</p>
                             )}
                           </div>
-                          <div className="flex items-center space-x-2 ml-4">
-                            <button
-                              onClick={() => handleToggleMenuItemAvailability(item)}
-                              className="text-gray-400 hover:text-white transition"
-                              title={item.is_available ? "Отключить" : "Включить"}
-                            >
-                              {item.is_available ? (
-                                <FaToggleOn size={24} className="text-green-500" />
-                              ) : (
-                                <FaToggleOff size={24} className="text-gray-500" />
-                              )}
-                            </button>
+                          <div className="flex flex-col gap-2 ml-4 flex-shrink-0">
                             <button
                               onClick={() => setEditingMenuItem(item)}
-                              className="text-gray-400 hover:text-white transition"
+                              className="px-3 py-1.5 text-sm rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 active:bg-blue-500/40 disabled:opacity-50"
                             >
-                              <FaEdit size={20} />
+                              Редактировать
+                            </button>
+                            <button
+                              onClick={() => handleToggleMenuItemAvailability(item)}
+                              className={`px-3 py-1.5 text-sm rounded-lg disabled:opacity-50 ${
+                                item.is_available
+                                  ? "bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 active:bg-yellow-500/40"
+                                  : "bg-green-500/20 text-green-400 hover:bg-green-500/30 active:bg-green-500/40"
+                              }`}
+                            >
+                              {item.is_available ? "Деактивировать" : "Активировать"}
                             </button>
                             <button
                               onClick={() => handleDeleteMenuItem(item.id)}
-                              className="text-gray-400 hover:text-red-500 transition"
+                              className="px-3 py-1.5 text-sm rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 active:bg-red-500/40 disabled:opacity-50"
                             >
-                              <FaTrash size={20} />
+                              Удалить
                             </button>
                           </div>
                         </div>
@@ -358,6 +402,7 @@ export default function MenuManager() {
           onCancel={() => setEditingMenuItem(null)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }

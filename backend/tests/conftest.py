@@ -67,12 +67,18 @@ async def db_session(test_engine, setup_database) -> AsyncGenerator[AsyncSession
             raise
         finally:
             # Clean up tables after each test
+            # Import MenuItemOption and UserAccessRequest for cleanup
+            from src.models.cafe import MenuItemOption
+            from src.models.user import UserAccessRequest
+
             await session.execute(Order.__table__.delete())
             await session.execute(CafeLinkRequest.__table__.delete())
             await session.execute(Deadline.__table__.delete())
+            await session.execute(MenuItemOption.__table__.delete())  # Delete options before menu_items
             await session.execute(MenuItem.__table__.delete())
             await session.execute(Combo.__table__.delete())
             await session.execute(Cafe.__table__.delete())
+            await session.execute(UserAccessRequest.__table__.delete())  # Delete requests before users
             await session.execute(User.__table__.delete())
             await session.commit()
 
@@ -241,10 +247,10 @@ async def test_order(
         order_date=order_date,
         status="pending",
         combo_id=test_combo.id,
-        combo_items=[
-            {"category": "soup", "menu_item_id": test_menu_items[0].id},
-            {"category": "main", "menu_item_id": test_menu_items[1].id},
-            {"category": "salad", "menu_item_id": test_menu_items[2].id},
+        items=[
+            {"type": "combo", "category": "soup", "menu_item_id": test_menu_items[0].id},
+            {"type": "combo", "category": "main", "menu_item_id": test_menu_items[1].id},
+            {"type": "combo", "category": "salad", "menu_item_id": test_menu_items[2].id},
         ],
         extras=[{"menu_item_id": test_menu_items[3].id, "quantity": 1}],
         notes="No onions",

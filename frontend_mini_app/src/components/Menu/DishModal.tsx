@@ -1,7 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { FaXmark, FaLeaf, FaSeedling, FaExclamation } from "react-icons/fa6";
+
+interface MenuItemOption {
+  id: number;
+  menu_item_id: number;
+  name: string;
+  values: string[];
+  is_required: boolean;
+}
 
 type Dish = {
   id: number;
@@ -11,14 +19,20 @@ type Dish = {
   categoryId: string;
   composition?: string[];
   suitableFor?: string[];
+  options?: MenuItemOption[];
 };
+
+interface CartItem {
+  quantity: number;
+  options?: Record<string, string>;
+}
 
 interface DishModalProps {
   dish: Dish;
   isOpen: boolean;
   onClose: () => void;
-  cart: { [key: number]: number };
-  addToCart: (dishId: number) => void;
+  cart: { [key: number]: CartItem };
+  addToCart: (dishId: number, options?: Record<string, string>) => void;
   removeFromCart: (dishId: number) => void;
 }
 
@@ -30,6 +44,15 @@ const DishModal: React.FC<DishModalProps> = ({
   addToCart,
   removeFromCart,
 }) => {
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
+
+  // Reset options when dish changes or modal closes
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedOptions({});
+    }
+  }, [isOpen, dish.id]);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -177,6 +200,50 @@ const DishModal: React.FC<DishModalProps> = ({
             </div>
           )}
 
+          {dish.options && dish.options.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-full"></span>
+                Опции:
+              </h3>
+              <div className="space-y-4">
+                {dish.options.map((option) => (
+                  <div key={option.id} className="space-y-2">
+                    <label className="block text-white text-sm font-medium">
+                      {option.name}
+                      {option.is_required && (
+                        <span className="text-red-400 ml-1">*</span>
+                      )}
+                    </label>
+                    <select
+                      value={selectedOptions[option.name] || ""}
+                      onChange={(e) =>
+                        setSelectedOptions({
+                          ...selectedOptions,
+                          [option.name]: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#8B23CB]/50 focus:border-transparent"
+                    >
+                      <option value="" className="bg-[#1E1B3A] text-gray-300">
+                        Выберите...
+                      </option>
+                      {option.values.map((value) => (
+                        <option
+                          key={value}
+                          value={value}
+                          className="bg-[#1E1B3A] text-white"
+                        >
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="border-t border-white/10 my-6"></div>
 
           <div className="flex items-center justify-between">
@@ -193,10 +260,20 @@ const DishModal: React.FC<DishModalProps> = ({
                     -
                   </button>
                   <span className="text-white font-bold text-xl min-w-[30px] text-center">
-                    {cart[dish.id]}
+                    {cart[dish.id].quantity}
                   </span>
                   <button
-                    onClick={() => addToCart(dish.id)}
+                    onClick={() => {
+                      const requiredOptions = dish.options?.filter(opt => opt.is_required) || [];
+                      const missingOptions = requiredOptions.filter(opt => !selectedOptions[opt.name]);
+
+                      if (missingOptions.length > 0) {
+                        alert(`Выберите обязательные опции: ${missingOptions.map(o => o.name).join(", ")}`);
+                        return;
+                      }
+
+                      addToCart(dish.id, selectedOptions);
+                    }}
                     className="w-10 h-10 flex items-center justify-center bg-white/20 rounded-full hover:bg-white/30 transition-colors text-white text-xl"
                   >
                     +
@@ -204,7 +281,17 @@ const DishModal: React.FC<DishModalProps> = ({
                 </div>
               ) : (
                 <button
-                  onClick={() => addToCart(dish.id)}
+                  onClick={() => {
+                    const requiredOptions = dish.options?.filter(opt => opt.is_required) || [];
+                    const missingOptions = requiredOptions.filter(opt => !selectedOptions[opt.name]);
+
+                    if (missingOptions.length > 0) {
+                      alert(`Выберите обязательные опции: ${missingOptions.map(o => o.name).join(", ")}`);
+                      return;
+                    }
+
+                    addToCart(dish.id, selectedOptions);
+                  }}
                   className="px-6 py-3 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] rounded-lg text-white font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
                 >
                   + Добавить в корзину
@@ -216,7 +303,15 @@ const DishModal: React.FC<DishModalProps> = ({
             <button
               onClick={() => {
                 if (!cart[dish.id]) {
-                  addToCart(dish.id);
+                  const requiredOptions = dish.options?.filter(opt => opt.is_required) || [];
+                  const missingOptions = requiredOptions.filter(opt => !selectedOptions[opt.name]);
+
+                  if (missingOptions.length > 0) {
+                    alert(`Выберите обязательные опции: ${missingOptions.map(o => o.name).join(", ")}`);
+                    return;
+                  }
+
+                  addToCart(dish.id, selectedOptions);
                 }
                 onClose();
               }}

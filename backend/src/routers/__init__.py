@@ -7,11 +7,13 @@ from .menu import router as menu_router
 from .orders import router as orders_router
 from .recommendations import router as recommendations_router
 from .summaries import router as summaries_router
+from .user_requests import router as user_requests_router
 from .users import router as users_router
 
 __all__ = [
     "auth_router",
     "users_router",
+    "user_requests_router",
     "cafes_router",
     "cafe_links_router",
     "cafe_requests_router",

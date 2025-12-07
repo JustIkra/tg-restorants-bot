@@ -15,6 +15,7 @@ from .routers import (
     orders_router,
     recommendations_router,
     summaries_router,
+    user_requests_router,
     users_router,
 )
 
@@ -42,6 +43,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(user_requests_router, prefix="/api/v1")
 app.include_router(cafes_router, prefix="/api/v1")
 app.include_router(cafe_links_router, prefix="/api/v1")
 app.include_router(cafe_requests_router, prefix="/api/v1")

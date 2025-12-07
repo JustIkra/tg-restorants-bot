@@ -8,8 +8,10 @@ import {
   useCafes,
 } from "@/lib/api/hooks";
 import { mutate } from "swr";
+import { useConfirm } from "@/hooks/useConfirm";
 
 const ReportsList: React.FC = () => {
+  const { confirm } = useConfirm();
   const { data: summaries, error, isLoading } = useSummaries();
   const { data: cafes } = useCafes(true, false); // Get all cafes, not just active
   const { createSummary } = useCreateSummary();
@@ -24,7 +26,14 @@ const ReportsList: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
 
   const handleDelete = async (summaryId: number) => {
-    if (!confirm("Вы уверены, что хотите удалить этот отчёт?")) {
+    const confirmed = await confirm({
+      title: "Удаление отчёта",
+      message: "Вы уверены, что хотите удалить этот отчёт?",
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) {
       return;
     }
 

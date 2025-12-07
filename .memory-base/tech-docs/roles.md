@@ -24,6 +24,11 @@
 - Main page: `/` (order interface)
 - Cannot access: `/manager` (redirected to `/`)
 
+**Access Request Workflow:**
+- New users must submit an access request on first authentication
+- Requests are reviewed by managers in the Manager Panel
+- Users can only access the system after their request is approved
+
 ---
 
 ## Manager
@@ -41,7 +46,8 @@
 
 **Permissions:**
 - All user permissions (can create orders, view menus, use FortuneWheel)
-- Manage users (create, block, delete)
+- Manage users (create, update, block, delete)
+- Approve/reject user access requests
 - Manage cafes (create, edit, activate/deactivate, delete)
 - Manage menus and combos
 - Approve/reject cafe connection requests
@@ -81,8 +87,12 @@
 | `GET /orders` | `CurrentUser` (user or manager) |
 | `GET /users` | `ManagerUser` (manager only) |
 | `POST /users` | `ManagerUser` (manager only) |
+| `PATCH /users/{tgid}` | `ManagerUser` (manager only) |
 | `PATCH /users/{tgid}/access` | `ManagerUser` (manager only) |
 | `DELETE /users/{tgid}` | `ManagerUser` (manager only) |
+| `GET /user-requests` | `ManagerUser` (manager only) |
+| `POST /user-requests/{id}/approve` | `ManagerUser` (manager only) |
+| `POST /user-requests/{id}/reject` | `ManagerUser` (manager only) |
 | `POST /cafes` | `ManagerUser` (manager only) |
 | `PATCH /cafes/{id}` | `ManagerUser` (manager only) |
 | `DELETE /cafes/{id}` | `ManagerUser` (manager only) |

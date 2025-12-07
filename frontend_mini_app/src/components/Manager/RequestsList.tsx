@@ -7,8 +7,10 @@ import {
   useRejectCafeRequest,
 } from "@/lib/api/hooks";
 import { mutate } from "swr";
+import { useConfirm } from "@/hooks/useConfirm";
 
 const RequestsList: React.FC = () => {
+  const { confirm } = useConfirm();
   const { data: requests, error, isLoading } = useCafeRequests();
   const { approveRequest } = useApproveCafeRequest();
   const { rejectRequest } = useRejectCafeRequest();
@@ -31,7 +33,14 @@ const RequestsList: React.FC = () => {
   };
 
   const handleReject = async (requestId: number) => {
-    if (!confirm("Вы уверены, что хотите отклонить этот запрос?")) {
+    const confirmed = await confirm({
+      title: "Отклонение запроса",
+      message: "Вы уверены, что хотите отклонить этот запрос?",
+      confirmText: "Отклонить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) {
       return;
     }
 

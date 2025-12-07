@@ -2,7 +2,7 @@
 id: TSK-015
 title: Добавить возможность заказа отдельных блюд с опциями
 pipeline: feature
-status: pending
+status: completed
 created_at: 2025-12-07T00:00:00Z
 related_files:
   - backend/src/models/cafe.py

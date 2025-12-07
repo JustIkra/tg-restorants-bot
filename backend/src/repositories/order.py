@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Order
 
 # Whitelist of fields that can be updated via repository
-ALLOWED_UPDATE_FIELDS = {"combo_id", "combo_items", "extras", "notes", "total_price", "status"}
+ALLOWED_UPDATE_FIELDS: set[str] = {"combo_id", "items", "combo_items", "extras", "notes", "total_price", "status"}
 
 
 class OrderRepository:

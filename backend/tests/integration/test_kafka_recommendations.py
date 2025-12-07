@@ -72,7 +72,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=order_date,
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                     {"category": "main", "menu_item_id": test_menu_items[1].id},
                 ],
@@ -127,7 +127,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -166,7 +166,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -218,7 +218,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -233,7 +233,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "main", "menu_item_id": test_menu_items[1].id},
                 ],
                 total_price=Decimal("12.00"),
@@ -316,7 +316,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -331,7 +331,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "main", "menu_item_id": test_menu_items[1].id},
                 ],
                 total_price=Decimal("12.00"),
@@ -375,7 +375,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -428,7 +428,7 @@ class TestKafkaRecommendationsWorker:
                 order_date=date.today() - timedelta(days=i),
                 status="completed",
                 combo_id=test_combo.id,
-                combo_items=[
+                items=[
                     {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 ],
                 total_price=Decimal("10.00"),
@@ -493,7 +493,7 @@ class TestKafkaRecommendationsWorker:
                     order_date=date.today() - timedelta(days=i),
                     status="completed",
                     combo_id=test_combo.id,
-                    combo_items=[
+                    items=[
                         {"category": "soup", "menu_item_id": test_menu_items[0].id},
                     ],
                     total_price=Decimal("10.00"),

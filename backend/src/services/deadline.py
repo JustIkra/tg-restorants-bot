@@ -73,16 +73,19 @@ class DeadlineService:
                 reason="Ordering disabled for this day",
             )
 
-        # Parse deadline time
+        # Parse deadline time (stored without timezone) and evaluate in server local tz
         hour, minute = map(int, deadline.deadline_time.split(":"))
         deadline_time = time(hour, minute)
+
+        # Use server local timezone to avoid premature cut-offs when server runs not in UTC
+        local_tz = datetime.now().astimezone().tzinfo or timezone.utc
 
         # Calculate deadline datetime
         # If advance_days > 0, deadline is advance_days before order_date
         deadline_date = order_date - timedelta(days=deadline.advance_days)
-        deadline_dt = datetime.combine(deadline_date, deadline_time, tzinfo=timezone.utc)
+        deadline_dt = datetime.combine(deadline_date, deadline_time, tzinfo=local_tz)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(local_tz)
 
         if now > deadline_dt:
             return AvailabilityResponse(

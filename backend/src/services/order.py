@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,15 +45,45 @@ class OrderService:
         # 1. Validate deadline
         await self.deadline_service.validate_order_deadline(data.cafe_id, data.order_date)
 
-        # 2. Validate combo items
-        combo_items_dict = [item.model_dump() for item in data.combo_items]
-        await self.menu_service.validate_combo_items(data.combo_id, combo_items_dict)
+        items_dict = [item.model_dump() for item in data.items]
+        extras_dict = [extra.model_dump() for extra in data.extras]
+
+        # 2. Validate items based on combo_id
+        if data.combo_id:
+            # Combo order - validate combo items
+            combo_items = [item for item in items_dict if item.get("type") == "combo"]
+            if not combo_items:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Combo order requires at least one combo item"
+                )
+            await self.menu_service.validate_combo_items(data.combo_id, combo_items)
+
+            # Also validate any standalone items
+            standalone_items = [item for item in items_dict if item.get("type") == "standalone"]
+            if standalone_items:
+                await self.menu_service.validate_standalone_items(standalone_items)
+        else:
+            # Standalone order - all items must be standalone
+            for item in items_dict:
+                if item.get("type") == "combo":
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Combo items require combo_id to be set"
+                    )
+            await self.menu_service.validate_standalone_items(items_dict)
 
         # 3. Calculate total price
-        combo = await self.menu_service.get_combo(data.combo_id)
-        extras_dict = [extra.model_dump() for extra in data.extras]
+        combo_price = Decimal("0")
+        if data.combo_id:
+            combo = await self.menu_service.get_combo(data.combo_id)
+            combo_price = combo.price
+
+        standalone_items = [item for item in items_dict if item.get("type") == "standalone"]
+        standalone_price = await self.menu_service.calculate_standalone_price(standalone_items)
+
         extras_price = await self.menu_service.calculate_extras_price(extras_dict)
-        total_price = combo.price + extras_price
+        total_price = combo_price + standalone_price + extras_price
 
         # 4. Create order
         return await self.repo.create(
@@ -60,7 +91,7 @@ class OrderService:
             cafe_id=data.cafe_id,
             order_date=data.order_date,
             combo_id=data.combo_id,
-            combo_items=combo_items_dict,
+            items=items_dict,  # Используем items вместо combo_items
             extras=extras_dict,
             notes=data.notes,
             total_price=total_price,
@@ -94,12 +125,32 @@ class OrderService:
         if data.combo_id is not None:
             update_data["combo_id"] = data.combo_id
 
-        # Update combo items if changed
-        if data.combo_items is not None:
-            combo_id = data.combo_id or order.combo_id
-            combo_items_dict = [item.model_dump() for item in data.combo_items]
-            await self.menu_service.validate_combo_items(combo_id, combo_items_dict)
-            update_data["combo_items"] = combo_items_dict
+        # Update items if changed
+        if data.items is not None:
+            combo_id = data.combo_id if data.combo_id is not None else order.combo_id
+            items_dict = [item.model_dump() for item in data.items]
+
+            # Validate items based on combo_id
+            if combo_id:
+                # Combo order - validate combo items
+                combo_items = [item for item in items_dict if item.get("type") == "combo"]
+                await self.menu_service.validate_combo_items(combo_id, combo_items)
+
+                # Also validate any standalone items
+                standalone_items = [item for item in items_dict if item.get("type") == "standalone"]
+                if standalone_items:
+                    await self.menu_service.validate_standalone_items(standalone_items)
+            else:
+                # Standalone order - all items must be standalone
+                for item in items_dict:
+                    if item.get("type") == "combo":
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Combo items require combo_id to be set"
+                        )
+                await self.menu_service.validate_standalone_items(items_dict)
+
+            update_data["items"] = items_dict
 
         # Update extras if changed
         if data.extras is not None:
@@ -111,12 +162,25 @@ class OrderService:
             update_data["notes"] = data.notes
 
         # Recalculate total price if needed
-        if data.combo_id is not None or data.extras is not None:
-            combo_id = update_data.get("combo_id", order.combo_id)
-            combo = await self.menu_service.get_combo(combo_id)
+        if data.combo_id is not None or data.items is not None or data.extras is not None:
+            combo_id = update_data.get("combo_id") if "combo_id" in update_data else order.combo_id
+            items = update_data.get("items", order.items)
             extras = update_data.get("extras", order.extras)
+
+            # Calculate combo price
+            combo_price = Decimal("0")
+            if combo_id:
+                combo = await self.menu_service.get_combo(combo_id)
+                combo_price = combo.price
+
+            # Calculate standalone price
+            standalone_items = [item for item in items if item.get("type") == "standalone"]
+            standalone_price = await self.menu_service.calculate_standalone_price(standalone_items)
+
+            # Calculate extras price
             extras_price = await self.menu_service.calculate_extras_price(extras)
-            update_data["total_price"] = combo.price + extras_price
+
+            update_data["total_price"] = combo_price + standalone_price + extras_price
 
         return await self.repo.update(order, **update_data)
 

@@ -11,6 +11,7 @@ from ..schemas.user import (
     UserAccessUpdate,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 from ..services.user import UserService
 
@@ -67,6 +68,17 @@ async def get_user(
             detail="Access denied",
         )
     return await service.get_user(tgid)
+
+
+@router.patch("/{tgid}", response_model=UserResponse)
+async def update_user(
+    tgid: int,
+    data: UserUpdate,
+    manager: ManagerUser,
+    service: Annotated[UserService, Depends(get_user_service)],
+):
+    """Update user (name, office, role) (manager only)."""
+    return await service.update_user(tgid, data)
 
 
 @router.delete("/{tgid}", status_code=204)

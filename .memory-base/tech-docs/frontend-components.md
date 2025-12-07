@@ -216,6 +216,18 @@ interface RecommendationsResponse {
   stats: OrderStats;
   generated_at: string | null;
 }
+
+interface DeadlineItem {
+  weekday: number;          // 0=Пн, 1=Вт, ..., 6=Вс
+  deadline_time: string;    // "10:00"
+  is_enabled: boolean;
+  advance_days: number;     // 0-6
+}
+
+interface DeadlineScheduleResponse {
+  cafe_id: number;
+  schedule: DeadlineItem[];
+}
 ```
 
 ---
@@ -292,6 +304,21 @@ useUserBalance(tgid: number | null): {
 useUpdateBalanceLimit(): {
   updateLimit: (tgid: number, weekly_limit: number | null) => Promise<User>;
 }
+
+// Fetch deadline schedule for a cafe (manager only)
+useDeadlineSchedule(cafeId: number | null): {
+  data: DeadlineScheduleResponse | undefined;
+  error: Error | undefined;
+  isLoading: boolean;
+  mutate: () => void;
+}
+
+// Update deadline schedule for a cafe (manager only)
+useUpdateDeadlineSchedule(): {
+  updateSchedule: (cafeId: number, schedule: DeadlineItem[]) => Promise<DeadlineScheduleResponse>;
+  isLoading: boolean;
+  error: Error | undefined;
+}
 ```
 
 **Features:**
@@ -314,6 +341,10 @@ const { createOrder, isLoading: orderLoading } = useCreateOrder();
 const { data: recommendations } = useUserRecommendations(user.tgid);
 const { data: balance } = useUserBalance(user.tgid);
 const { updateLimit } = useUpdateBalanceLimit();
+
+// Manager deadline schedule hooks
+const { data: schedule } = useDeadlineSchedule(selectedCafeId);
+const { updateSchedule } = useUpdateDeadlineSchedule();
 ```
 
 ---
@@ -858,6 +889,124 @@ const handleProfileClick = () => {
 
 ---
 
+## Access Request Components
+
+Components for handling new user access requests.
+
+**Location:** `frontend_mini_app/src/components/AccessRequestForm/`
+
+### AccessRequestForm
+
+**Path:** `frontend_mini_app/src/components/AccessRequestForm/AccessRequestForm.tsx`
+
+**Назначение:** Форма для запроса доступа к системе для незарегистрированных пользователей
+
+**Props:**
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| name | string | Yes | Имя пользователя из Telegram |
+| username | string \| null | Yes | Username из Telegram |
+| onSubmit | (office: string) => Promise<void> | Yes | Callback отправки формы |
+| onSuccess | () => void | Yes | Callback успешной отправки |
+
+**States:**
+- Idle: кнопка активна
+- Loading: кнопка disabled + spinner
+- Error: показ ошибки
+
+**Использование:**
+```tsx
+<AccessRequestForm
+  name="Иван Иванов"
+  username="ivan"
+  onSubmit={async (office) => {
+    await authenticateWithTelegram(initData, office);
+  }}
+  onSuccess={() => setAuthState("pending")}
+/>
+```
+
+**Особенности:**
+- Три поля формы:
+  - Имя (readonly, предзаполнено из Telegram)
+  - Username (readonly, опционально, показывается только если есть)
+  - Офис (input, обязательное поле)
+- Валидация: офис не должен быть пустым
+- Loading state при отправке с анимацией spinner
+- Обработка и отображение ошибок
+- Кнопка disabled во время отправки
+
+**Стилизация:**
+- Glassmorphism дизайн: `bg-white/5 backdrop-blur-md border border-white/10`
+- Purple gradient для кнопки: `from-[#8B23CB] to-[#A020F0]`
+- Background: `bg-[#130F30]`
+- Иконки: FaUser, FaBuilding, FaPaperPlane, FaSpinner из react-icons/fa6
+- Центрированный layout с максимальной шириной 28rem
+- Responsive дизайн с padding и адаптивными размерами
+
+**Form Fields:**
+```typescript
+// Name (readonly)
+<input
+  type="text"
+  value={name}
+  readOnly
+  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white"
+/>
+
+// Username (readonly, optional)
+{username && (
+  <input
+    type="text"
+    value={`@${username}`}
+    readOnly
+    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-gray-400"
+  />
+)}
+
+// Office (input, required)
+<input
+  type="text"
+  value={office}
+  onChange={(e) => setOffice(e.target.value)}
+  placeholder="Например: Офис A, Москва"
+  required
+  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white"
+/>
+```
+
+**Submit Button:**
+```tsx
+<button
+  type="submit"
+  disabled={isSubmitting}
+  className="w-full px-6 py-3 bg-gradient-to-r from-[#8B23CB] to-[#A020F0] text-white font-semibold rounded-lg disabled:opacity-50"
+>
+  {isSubmitting ? (
+    <>
+      <FaSpinner className="animate-spin" />
+      Отправка...
+    </>
+  ) : (
+    <>
+      <FaPaperPlane />
+      Отправить запрос
+    </>
+  )}
+</button>
+```
+
+**Error Handling:**
+```tsx
+{error && (
+  <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+    <p className="text-red-200 text-sm">{error}</p>
+  </div>
+)}
+```
+
+---
+
 ## Main Page Flow
 
 ### page.tsx
@@ -911,6 +1060,31 @@ const isOrderComplete = selectedCombo &&
 
 ### Authentication Flow
 
+**Multi-State Authentication (TSK-020):**
+
+The authentication flow now supports 6 different states to handle new users, pending access requests, and rejected requests:
+
+```typescript
+type AuthState = "loading" | "needs_request" | "success" | "pending" | "rejected" | "error";
+
+const [authState, setAuthState] = useState<AuthState>("loading");
+const [telegramUserData, setTelegramUserData] = useState<{
+  name: string;
+  username: string | null;
+} | null>(null);
+```
+
+**Authentication States:**
+
+1. **loading** - Initial state while authenticating
+2. **needs_request** - New user needs to submit access request
+3. **pending** - Access request is pending manager approval
+4. **rejected** - Access request was rejected
+5. **success** - User authenticated successfully
+6. **error** - Authentication error
+
+**Authentication Logic:**
+
 ```typescript
 useEffect(() => {
   initTelegramWebApp();
@@ -919,33 +1093,110 @@ useEffect(() => {
 useEffect(() => {
   const initData = getTelegramInitData();
   if (!initData) {
-    console.error("Not in Telegram WebApp");
+    setAuthState("error");
+    setAuthError("Telegram initData недоступен");
     return;
   }
 
+  // Get Telegram user data for form pre-fill
+  const tgUser = getTelegramUser();
+  if (tgUser) {
+    setTelegramUserData({
+      name: `${tgUser.first_name} ${tgUser.last_name || ""}`.trim(),
+      username: tgUser.username || null,
+    });
+  }
+
+  // Try authentication
   authenticateWithTelegram(initData)
     .then((response) => {
       setIsAuthenticated(true);
       setUser(response.user);
-      console.log("Telegram auth successful");
-
-      // Save user object to localStorage
+      setAuthState("success");
       localStorage.setItem("user", JSON.stringify(response.user));
-
-      // Manager can stay on main page - no automatic redirect
     })
     .catch(err => {
-      console.error("Auth failed:", err);
-      alert("Ошибка авторизации. Пожалуйста, перезапустите приложение.");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      // Parse 403 errors for access request states
+      if (errorMessage.includes("Access request created")) {
+        setAuthState("pending");
+      } else if (errorMessage.includes("Access request pending")) {
+        setAuthState("pending");
+      } else if (errorMessage.includes("Access request rejected")) {
+        setAuthState("rejected");
+      } else {
+        setAuthError(errorMessage);
+        setAuthState("error");
+      }
     });
 }, []);
 ```
 
-**Key Changes (TSK-010):**
+**Access Request Handlers:**
+
+```typescript
+const handleAccessRequestSubmit = async (office: string) => {
+  const initData = getTelegramInitData();
+  if (!initData) {
+    throw new Error("Telegram initData недоступен");
+  }
+
+  await authenticateWithTelegram(initData, office);
+};
+
+const handleAccessRequestSuccess = () => {
+  setAuthState("pending");
+};
+```
+
+**UI Rendering by State:**
+
+```typescript
+// Loading state
+if (authState === "loading") {
+  return <LoadingScreen />;
+}
+
+// Access request form
+if (authState === "needs_request" && telegramUserData) {
+  return (
+    <AccessRequestForm
+      name={telegramUserData.name}
+      username={telegramUserData.username}
+      onSubmit={handleAccessRequestSubmit}
+      onSuccess={handleAccessRequestSuccess}
+    />
+  );
+}
+
+// Pending approval
+if (authState === "pending") {
+  return <PendingApprovalScreen />;
+}
+
+// Request rejected
+if (authState === "rejected") {
+  return <RejectedScreen />;
+}
+
+// Auth error
+if (authState === "error") {
+  return <ErrorScreen message={authError} />;
+}
+
+// Success - show main app
+return <MainAppUI />;
+```
+
+**Key Features (TSK-010, TSK-020):**
 - Managers no longer automatically redirected to `/manager` after authentication
 - User object saved to `localStorage` and component state
 - Managers can access both `/` (user interface) and `/manager` (admin panel)
 - Navigation between interfaces handled by dedicated buttons
+- New users see access request form instead of generic error
+- Clear UI states for pending and rejected access requests
+- Office parameter passed to authentication for new users
 
 ### Order Date Selection + Submission
 
@@ -1212,8 +1463,10 @@ Main admin panel with tab-based navigation. Features:
 
 **Tabs:**
 - Users - User management
+- Balances - Corporate balance management
 - Cafes - Cafe management
 - Menu - Menu and combo management
+- Deadlines - Deadline schedule management
 - Requests - Cafe connection requests
 - Reports - Order summaries and reports
 
@@ -1686,6 +1939,221 @@ const tabs: { id: TabId; name: string; icon: JSX.Element }[] = [
 - Mitigation: SWR кэширование, lazy loading через UserBalanceRow
 - Alternative: создать batch endpoint на backend (future improvement)
 
+---
+
+### DeadlineSchedule
+
+**Component:** `DeadlineSchedule.tsx`
+
+**Location:** `frontend_mini_app/src/components/Manager/DeadlineSchedule.tsx`
+
+**Назначение:** Управление расписанием дедлайнов заказов для каждого кафе
+
+**Access:** Manager only (via manager panel `/manager` → tab "Расписание")
+
+**Features:**
+
+1. **Cafe Selection:**
+   - Dropdown для выбора кафе
+   - Загружает доступные кафе через `useCafes(true, false)`
+   - При смене кафе очищает сообщения и перезагружает расписание
+
+2. **Schedule Configuration:**
+   - Форма с 7 днями недели (Понедельник - Воскресенье)
+   - Для каждого дня:
+     - Checkbox `is_enabled` — включить/выключить приём заказов
+     - Input time `deadline_time` — время дедлайна (формат HH:MM)
+     - Input number `advance_days` — за сколько дней заранее можно заказать (0-6)
+   - Условный рендеринг полей — время и дни заранее показываются только для enabled дней
+
+3. **Data Handling:**
+   - Загружает существующее расписание через `useDeadlineSchedule(cafeId)`
+   - Инициализирует дефолтными значениями если расписания нет
+   - Дефолты: все дни `is_enabled: false`, время `10:00`, `advance_days: 0`
+   - Обновляет расписание через `useUpdateDeadlineSchedule()`
+
+4. **States:**
+   - Loading: Spinner с сообщением "Загрузка..."
+   - Empty (no cafe selected): "Выберите кафе для настройки расписания"
+   - Success: Green banner с auto-hide через 3 секунды
+   - Error: Red banner с сообщением об ошибке
+   - Saving: Disabled form с spinner на кнопке
+
+**Hooks:**
+```typescript
+const { data: cafes } = useCafes(true, false);
+const { data: scheduleData, isLoading } = useDeadlineSchedule(selectedCafeId);
+const { updateSchedule, isLoading: isUpdating } = useUpdateDeadlineSchedule();
+```
+
+**Usage:**
+```tsx
+// В manager/page.tsx
+{activeTab === "deadlines" && (
+  <div className="text-white">
+    <DeadlineSchedule />
+  </div>
+)}
+```
+
+**Data Types:**
+```typescript
+// DeadlineItem (один день в расписании)
+interface DeadlineItem {
+  weekday: number;          // 0=Пн, 1=Вт, ..., 6=Вс
+  deadline_time: string;    // "10:00"
+  is_enabled: boolean;
+  advance_days: number;     // 0-6
+}
+
+// DeadlineScheduleResponse (ответ API)
+interface DeadlineScheduleResponse {
+  cafe_id: number;
+  schedule: DeadlineItem[];
+}
+```
+
+**Form State Management:**
+```typescript
+const [formData, setFormData] = useState<DeadlineItem[]>([]);
+
+// Initialize from API or defaults
+useEffect(() => {
+  if (scheduleData?.schedule) {
+    setFormData(scheduleData.schedule);
+  } else if (selectedCafeId) {
+    setFormData(
+      Array.from({ length: 7 }, (_, i) => ({
+        weekday: i,
+        deadline_time: "10:00",
+        is_enabled: false,
+        advance_days: 0,
+      }))
+    );
+  }
+}, [scheduleData, selectedCafeId]);
+
+// Update field
+const handleFieldChange = (
+  weekday: number,
+  field: keyof DeadlineItem,
+  value: string | boolean | number
+) => {
+  setFormData((prev) =>
+    prev.map((item) =>
+      item.weekday === weekday ? { ...item, [field]: value } : item
+    )
+  );
+};
+```
+
+**Submit Logic:**
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!selectedCafeId) {
+    setErrorMessage("Пожалуйста, выберите кафе");
+    return;
+  }
+
+  try {
+    await updateSchedule(selectedCafeId, formData);
+    setSuccessMessage("Расписание успешно обновлено");
+    setTimeout(() => setSuccessMessage(null), 3000);
+  } catch (err) {
+    setErrorMessage(err instanceof Error ? err.message : "Не удалось обновить расписание");
+  }
+};
+```
+
+**Дизайн:**
+- Glass effect: `bg-white/5 backdrop-blur-md border border-white/10`
+- Inputs: `bg-white/10 border border-white/20`
+- Success banner: `bg-green-500/20 border border-green-500/30 text-green-400`
+- Error banner: `bg-red-500/20 border border-red-500/30 text-red-400`
+- Submit button: gradient `from-[#8B23CB] to-[#A020F0]`
+- Checkbox styling: purple accent color
+- Responsive grid: `grid-cols-1 md:grid-cols-2` для полей времени и дней
+
+**Layout:**
+```
+┌─────────────────────────────────┐
+│ Расписание дедлайнов            │
+├─────────────────────────────────┤
+│ [Dropdown: Выберите кафе     ▼] │
+├─────────────────────────────────┤
+│ ☑ Понедельник                   │
+│   Время: [10:00] Дней: [1]      │
+├─────────────────────────────────┤
+│ ☑ Вторник                       │
+│   Время: [10:00] Дней: [1]      │
+├─────────────────────────────────┤
+│ ☐ Среда                         │
+├─────────────────────────────────┤
+│ ...                             │
+├─────────────────────────────────┤
+│ [Сохранить расписание]          │
+└─────────────────────────────────┘
+```
+
+**Tab Integration:**
+
+В `manager/page.tsx`:
+
+```typescript
+import { FaCalendar } from "react-icons/fa6";
+import DeadlineSchedule from "@/components/Manager/DeadlineSchedule";
+
+const tabs = [
+  { id: "users", name: "Пользователи", icon: <FaUser /> },
+  { id: "balances", name: "Балансы", icon: <FaWallet /> },
+  { id: "cafes", name: "Кафе", icon: <FaStore /> },
+  { id: "menu", name: "Меню", icon: <FaUtensils /> },
+  { id: "deadlines", name: "Расписание", icon: <FaCalendar /> },
+  { id: "requests", name: "Запросы", icon: <FaEnvelope /> },
+  { id: "reports", name: "Отчёты", icon: <FaFileAlt /> },
+];
+
+// Render
+{activeTab === "deadlines" && (
+  <div className="text-white">
+    <DeadlineSchedule />
+  </div>
+)}
+```
+
+**Backend API:**
+- `GET /cafes/{cafe_id}/deadlines` — загрузка расписания
+- `PUT /cafes/{cafe_id}/deadlines` — обновление расписания
+  - Body: `{ schedule: DeadlineItem[] }`
+  - Response: `{ cafe_id: number, schedule: DeadlineItem[] }`
+
+**Weekday Names:**
+```typescript
+const WEEKDAY_NAMES = [
+  "Понедельник",   // 0
+  "Вторник",       // 1
+  "Среда",         // 2
+  "Четверг",       // 3
+  "Пятница",       // 4
+  "Суббота",       // 5
+  "Воскресенье",   // 6
+];
+```
+
+**Validation:**
+- Cafe selection required before submit
+- Advance days range: 0-6
+- Time format: HH:MM (browser native time input)
+- All validations display error banner
+
+**Auto-hide Success:**
+```typescript
+setSuccessMessage("Расписание успешно обновлено");
+setTimeout(() => setSuccessMessage(null), 3000);
+```
+
 ### Common Manager Component Patterns
 
 **Loading States:**
@@ -1821,6 +2289,13 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1  # Backend API URL
 | `POST /cafes/{id}/menu` | `useCreateMenuItem()` | Create menu item |
 | `PATCH /cafes/{id}/menu/{item_id}` | `useUpdateMenuItem()` | Update menu item |
 | `DELETE /cafes/{id}/menu/{item_id}` | `useDeleteMenuItem()` | Delete menu item |
+
+**Deadline Schedule:**
+
+| Endpoint | Hook | Purpose |
+|----------|------|---------|
+| `GET /cafes/{cafe_id}/deadlines` | `useDeadlineSchedule(cafeId)` | Fetch deadline schedule |
+| `PUT /cafes/{cafe_id}/deadlines` | `useUpdateDeadlineSchedule()` | Update deadline schedule |
 
 **Cafe Requests:**
 

@@ -93,8 +93,8 @@ export default function ProfilePage() {
             <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-6">
               <p className="text-red-200">Ошибка загрузки рекомендаций: {recError.message}</p>
             </div>
-          ) : recommendations ? (
-            <ProfileRecommendations recommendations={recommendations} />
+          ) : recommendations && user?.tgid ? (
+            <ProfileRecommendations recommendations={recommendations} tgid={user.tgid} />
           ) : (
             <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6">
               <p className="text-gray-400 text-center">Нет данных о рекомендациях</p>

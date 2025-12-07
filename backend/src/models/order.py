@@ -15,8 +15,8 @@ class Order(Base):
     cafe_id: Mapped[int] = mapped_column(Integer, ForeignKey("cafes.id"), nullable=False)
     order_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
-    combo_id: Mapped[int] = mapped_column(Integer, ForeignKey("combos.id"), nullable=False)
-    combo_items: Mapped[list] = mapped_column(JSON, nullable=False)  # [{ category, menu_item_id }]
+    combo_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("combos.id"), nullable=True)
+    items: Mapped[list] = mapped_column("combo_items", JSON, nullable=False)  # Renamed from combo_items, supports combo and standalone
     extras: Mapped[list] = mapped_column(JSON, default=list, nullable=False)  # [{ menu_item_id, quantity }]
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     total_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -30,4 +30,9 @@ class Order(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="orders")
     cafe: Mapped["Cafe"] = relationship("Cafe", back_populates="orders")
-    combo: Mapped["Combo"] = relationship("Combo", back_populates="orders")
+    combo: Mapped["Combo | None"] = relationship("Combo", back_populates="orders")
+
+    @property
+    def combo_items(self):
+        """Deprecated (read-only). Use 'items' instead. Kept for backward compatibility."""
+        return self.items

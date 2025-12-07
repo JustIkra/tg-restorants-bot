@@ -24,7 +24,7 @@ async def user_with_order_history(
             order_date=(today - timedelta(days=i)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 {"category": "main", "menu_item_id": test_menu_items[1].id},
                 {"category": "salad", "menu_item_id": test_menu_items[2].id},

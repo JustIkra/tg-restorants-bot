@@ -1,10 +1,15 @@
 import React from "react";
 import type { MenuItem } from "@/lib/api/types";
 
+interface CartItem {
+  quantity: number;
+  options?: Record<string, string>;
+}
+
 interface ExtrasSectionProps {
   extras: MenuItem[];                      // category = "extra"
-  cart: { [itemId: number]: number };      // item_id -> quantity
-  addToCart: (itemId: number) => void;
+  cart: { [itemId: number]: CartItem };    // item_id -> CartItem
+  addToCart: (itemId: number, options?: Record<string, string>) => void;
   removeFromCart: (itemId: number) => void;
 }
 
@@ -23,7 +28,7 @@ const ExtrasSection: React.FC<ExtrasSectionProps> = ({
       <h3 className="text-white font-semibold text-xl">Дополнительно</h3>
       <div className="grid grid-cols-1 gap-3">
         {extras.map((extra) => {
-          const quantity = cart[extra.id] || 0;
+          const quantity = cart[extra.id]?.quantity || 0;
           return (
             <div
               key={extra.id}

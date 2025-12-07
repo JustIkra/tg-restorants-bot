@@ -5,14 +5,17 @@ import { useCafes } from "@/lib/api/hooks";
 import type { Cafe } from "@/lib/api/types";
 import { apiRequest } from "@/lib/api/client";
 import { mutate } from "swr";
+import { useConfirm } from "@/hooks/useConfirm";
 
 interface CafeListProps {
   onEdit?: (cafe: Cafe) => void;
+  shouldFetch?: boolean;
 }
 
-const CafeList: React.FC<CafeListProps> = ({ onEdit }) => {
-  const { data: cafes, error, isLoading } = useCafes(true, false); // Get all cafes, not just active
+const CafeList: React.FC<CafeListProps> = ({ onEdit, shouldFetch = true }) => {
+  const { data: cafes, error, isLoading } = useCafes(shouldFetch, false); // Get all cafes, not just active
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const { confirm } = useConfirm();
 
   const handleToggleStatus = async (cafe: Cafe) => {
     setProcessingId(cafe.id);
@@ -22,7 +25,7 @@ const CafeList: React.FC<CafeListProps> = ({ onEdit }) => {
         body: JSON.stringify({ is_active: !cafe.is_active }),
       });
       // Revalidate cafes list
-      mutate("/cafes");
+      mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"));
     } catch (err) {
       console.error("Failed to toggle cafe status:", err);
       alert(`Ошибка: ${err instanceof Error ? err.message : "Не удалось изменить статус"}`);
@@ -32,7 +35,14 @@ const CafeList: React.FC<CafeListProps> = ({ onEdit }) => {
   };
 
   const handleDelete = async (cafe: Cafe) => {
-    if (!confirm(`Вы уверены, что хотите удалить кафе "${cafe.name}"?`)) {
+    const confirmed = await confirm({
+      title: "Удаление кафе",
+      message: `Вы уверены, что хотите удалить кафе "${cafe.name}"?`,
+      confirmText: "Удалить",
+      cancelText: "Отмена",
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -42,7 +52,7 @@ const CafeList: React.FC<CafeListProps> = ({ onEdit }) => {
         method: "DELETE",
       });
       // Revalidate cafes list
-      mutate("/cafes");
+      mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"));
     } catch (err) {
       console.error("Failed to delete cafe:", err);
       alert(`Ошибка: ${err instanceof Error ? err.message : "Не удалось удалить кафе"}`);

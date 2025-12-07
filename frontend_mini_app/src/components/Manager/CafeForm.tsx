@@ -61,7 +61,7 @@ const CafeForm: React.FC<CafeFormProps> = ({
       }
 
       // Revalidate cafes list
-      mutate("/cafes");
+      await mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
 
       // Reset form
       setName("");

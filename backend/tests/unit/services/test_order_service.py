@@ -76,7 +76,7 @@ async def test_create_order_success(
         cafe_id=test_cafe.id,
         order_date=order_date,
         combo_id=test_combo.id,
-        combo_items=[
+        items=[
             {"category": "soup", "menu_item_id": test_menu_items[0].id},
             {"category": "main", "menu_item_id": test_menu_items[1].id},
             {"category": "salad", "menu_item_id": test_menu_items[2].id},

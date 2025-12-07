@@ -110,7 +110,7 @@ class OrderStatsService:
         """
         # Получаем все заказы пользователя за период
         result = await self.session.execute(
-            select(Order.combo_items).where(Order.user_tgid == user_tgid, Order.created_at >= since)
+            select(Order.items).where(Order.user_tgid == user_tgid, Order.created_at >= since)
         )
 
         # Подсчитываем категории из combo_items
@@ -138,7 +138,7 @@ class OrderStatsService:
         """
         # Получаем все заказы с combo_items и extras
         result = await self.session.execute(
-            select(Order.combo_items, Order.extras).where(
+            select(Order.items, Order.extras).where(
                 Order.user_tgid == user_tgid, Order.created_at >= since
             )
         )
@@ -184,7 +184,7 @@ class OrderStatsService:
         """
         # Получаем все заказы
         result = await self.session.execute(
-            select(Order.combo_items, Order.extras).where(
+            select(Order.items, Order.extras).where(
                 Order.user_tgid == user_tgid, Order.created_at >= since
             )
         )

@@ -32,17 +32,12 @@ export default function MenuItemForm({ mode, cafeId, initialData, onSubmit, onCa
       return;
     }
 
-    // Price is required only for "extra" category
-    if (category === "extra" && !price) {
-      alert("Для категории 'Дополнительно' необходимо указать цену");
-      return;
-    }
 
     onSubmit({
       name: name.trim(),
       description: description.trim() || undefined,
       category,
-      price: category === "extra" && price ? price : undefined,
+      price: price ? price : undefined,
     });
   };
 
@@ -105,22 +100,20 @@ export default function MenuItemForm({ mode, cafeId, initialData, onSubmit, onCa
             </select>
           </div>
 
-          {category === "extra" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Цена (₽)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#A020F0]"
-                placeholder="50.00"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Цена (₽)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#A020F0]"
+              placeholder="Необязательно"
+            />
+          </div>
 
           <div className="flex space-x-3 mt-6">
             <button

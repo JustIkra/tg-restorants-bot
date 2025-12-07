@@ -15,6 +15,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: str | None = None
     office: str | None = None
+    role: str | None = None
 
 
 class UserResponse(BaseModel):

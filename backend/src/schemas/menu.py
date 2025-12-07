@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # Combo schemas
@@ -60,5 +60,30 @@ class MenuItemResponse(BaseModel):
     category: str
     price: Decimal | None
     is_available: bool
+    options: list["MenuItemOptionResponse"] = []
+
+    model_config = {"from_attributes": True}
+
+
+# MenuItemOption schemas
+class MenuItemOptionBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    values: list[str] = Field(..., min_length=1)
+    is_required: bool = False
+
+
+class MenuItemOptionCreate(MenuItemOptionBase):
+    pass
+
+
+class MenuItemOptionUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    values: list[str] | None = Field(None, min_length=1)
+    is_required: bool | None = None
+
+
+class MenuItemOptionResponse(MenuItemOptionBase):
+    id: int
+    menu_item_id: int
 
     model_config = {"from_attributes": True}

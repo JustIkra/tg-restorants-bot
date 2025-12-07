@@ -17,6 +17,8 @@ import type {
   Summary,
   BalanceResponse,
   RecommendationsResponse,
+  DeadlineScheduleResponse,
+  DeadlineItem,
 } from "./types";
 
 interface UseDataResult<T> {
@@ -37,12 +39,14 @@ const fetcher = <T,>(endpoint: string) => apiRequest<T>(endpoint);
  * @param activeOnly - If true, filter only active cafes
  */
 export function useCafes(shouldFetch = true, activeOnly = true): UseDataResult<Cafe> {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<Cafe>>(
-    shouldFetch ? `/cafes${activeOnly ? "?active_only=true" : ""}` : null,
+  const { data, error, isLoading, mutate } = useSWR<Cafe[]>(
+    shouldFetch
+      ? `/cafes?active_only=${activeOnly ? "true" : "false"}`
+      : null,
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -52,14 +56,19 @@ export function useCafes(shouldFetch = true, activeOnly = true): UseDataResult<C
 /**
  * Hook to fetch combos for a specific cafe
  * @param cafeId - Cafe ID (null to skip fetching)
+ * @param activeOnly - If true, filter only available combos (default: true)
  */
-export function useCombos(cafeId: number | null): UseDataResult<Combo> {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<Combo>>(
-    cafeId ? `/cafes/${cafeId}/combos` : null,
+export function useCombos(cafeId: number | null, activeOnly = true): UseDataResult<Combo> {
+  const endpoint = cafeId
+    ? `/cafes/${cafeId}/combos?available_only=${activeOnly ? "true" : "false"}`
+    : null;
+
+  const { data, error, isLoading, mutate } = useSWR<Combo[]>(
+    endpoint,
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -70,19 +79,29 @@ export function useCombos(cafeId: number | null): UseDataResult<Combo> {
  * Hook to fetch menu items for a specific cafe
  * @param cafeId - Cafe ID (null to skip fetching)
  * @param category - Optional category filter (e.g., "soup", "salad", "main", "extra")
+ * @param activeOnly - If true, filter only available items (default: true)
  */
 export function useMenu(
   cafeId: number | null,
-  category?: string
+  category?: string,
+  activeOnly = true
 ): UseDataResult<MenuItem> {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<MenuItem>>(
-    cafeId
-      ? `/cafes/${cafeId}/menu${category ? `?category=${category}` : ""}`
-      : null,
+  // Build query params
+  const params = new URLSearchParams();
+  if (category) params.append("category", category);
+  params.append("available_only", activeOnly ? "true" : "false");
+
+  const queryString = params.toString();
+  const endpoint = cafeId
+    ? `/cafes/${cafeId}/menu?${queryString}`
+    : null;
+
+  const { data, error, isLoading, mutate } = useSWR<MenuItem[]>(
+    endpoint,
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -143,12 +162,12 @@ export function useOrders(filters?: {
 
   const queryString = params.toString();
   const endpoint = `/orders${queryString ? `?${queryString}` : ""}`;
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<Order>>(
+  const { data, error, isLoading, mutate } = useSWR<Order[]>(
     endpoint,
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -164,7 +183,7 @@ export function useCafeRequests(): UseDataResult<CafeRequest> {
     fetcher
   );
   return {
-    data: data?.items,
+    data: data?.items, // Keep .items - this endpoint returns { items, total, skip, limit }
     error,
     isLoading,
     mutate
@@ -245,12 +264,12 @@ export function useRejectCafeRequest(): {
  * Hook to fetch summaries (manager only)
  */
 export function useSummaries(): UseDataResult<Summary> {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<Summary>>(
+  const { data, error, isLoading, mutate } = useSWR<Summary[]>(
     "/summaries",
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -335,14 +354,15 @@ export function useDeleteSummary(): {
 
 /**
  * Hook to fetch all users (manager only)
+ * @param shouldFetch - If false, skip fetching (useful for waiting for auth)
  */
-export function useUsers(): UseDataResult<User> {
-  const { data, error, isLoading, mutate } = useSWR<ListResponse<User>>(
-    "/users",
+export function useUsers(shouldFetch = true): UseDataResult<User> {
+  const { data, error, isLoading, mutate } = useSWR<User[]>(
+    shouldFetch ? "/users" : null,
     fetcher
   );
   return {
-    data: data?.items,
+    data,
     error,
     isLoading,
     mutate
@@ -356,7 +376,7 @@ export function useCreateUser() {
   const { mutate } = useSWRConfig();
   const createUser = async (data: { tgid: number; name: string; office: string }) => {
     const result = await apiRequest<User>("/users", { method: "POST", body: JSON.stringify(data) });
-    mutate("/users");
+    await mutate("/users", undefined, { revalidate: true });
     return result;
   };
   return { createUser };
@@ -372,7 +392,7 @@ export function useUpdateUserAccess() {
       method: "PATCH",
       body: JSON.stringify({ is_active })
     });
-    mutate("/users");
+    await mutate("/users", undefined, { revalidate: true });
     return result;
   };
   return { updateAccess };
@@ -385,7 +405,7 @@ export function useDeleteUser() {
   const { mutate } = useSWRConfig();
   const deleteUser = async (tgid: number) => {
     await apiRequest(`/users/${tgid}`, { method: "DELETE" });
-    mutate("/users");
+    await mutate("/users", undefined, { revalidate: true });
   };
   return { deleteUser };
 }
@@ -401,7 +421,7 @@ export function useCreateCafe() {
   const { mutate } = useSWRConfig();
   const createCafe = async (data: { name: string; description?: string }) => {
     const result = await apiRequest<Cafe>("/cafes", { method: "POST", body: JSON.stringify(data) });
-    mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
+    await mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
     return result;
   };
   return { createCafe };
@@ -414,7 +434,7 @@ export function useUpdateCafe() {
   const { mutate } = useSWRConfig();
   const updateCafe = async (cafeId: number, data: { name?: string; description?: string }) => {
     const result = await apiRequest<Cafe>(`/cafes/${cafeId}`, { method: "PATCH", body: JSON.stringify(data) });
-    mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
+    await mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
     return result;
   };
   return { updateCafe };
@@ -427,7 +447,7 @@ export function useDeleteCafe() {
   const { mutate } = useSWRConfig();
   const deleteCafe = async (cafeId: number) => {
     await apiRequest(`/cafes/${cafeId}`, { method: "DELETE" });
-    mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
+    await mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
   };
   return { deleteCafe };
 }
@@ -442,7 +462,7 @@ export function useUpdateCafeStatus() {
       method: "PATCH",
       body: JSON.stringify({ is_active })
     });
-    mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
+    await mutate((key: string) => typeof key === "string" && key.startsWith("/cafes"), undefined, { revalidate: true });
     return result;
   };
   return { updateStatus };
@@ -459,7 +479,7 @@ export function useCreateCombo() {
   const { mutate } = useSWRConfig();
   const createCombo = async (cafeId: number, data: { name: string; categories: string[]; price: number }) => {
     const result = await apiRequest<Combo>(`/cafes/${cafeId}/combos`, { method: "POST", body: JSON.stringify(data) });
-    mutate(`/cafes/${cafeId}/combos`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/combos`), undefined, { revalidate: true });
     return result;
   };
   return { createCombo };
@@ -472,7 +492,7 @@ export function useUpdateCombo() {
   const { mutate } = useSWRConfig();
   const updateCombo = async (cafeId: number, comboId: number, data: Partial<Combo>) => {
     const result = await apiRequest<Combo>(`/cafes/${cafeId}/combos/${comboId}`, { method: "PATCH", body: JSON.stringify(data) });
-    mutate(`/cafes/${cafeId}/combos`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/combos`), undefined, { revalidate: true });
     return result;
   };
   return { updateCombo };
@@ -485,7 +505,7 @@ export function useDeleteCombo() {
   const { mutate } = useSWRConfig();
   const deleteCombo = async (cafeId: number, comboId: number) => {
     await apiRequest(`/cafes/${cafeId}/combos/${comboId}`, { method: "DELETE" });
-    mutate(`/cafes/${cafeId}/combos`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/combos`), undefined, { revalidate: true });
   };
   return { deleteCombo };
 }
@@ -501,7 +521,7 @@ export function useCreateMenuItem() {
   const { mutate } = useSWRConfig();
   const createMenuItem = async (cafeId: number, data: { name: string; description?: string; category: string; price?: number }) => {
     const result = await apiRequest<MenuItem>(`/cafes/${cafeId}/menu`, { method: "POST", body: JSON.stringify(data) });
-    mutate(`/cafes/${cafeId}/menu`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/menu`), undefined, { revalidate: true });
     return result;
   };
   return { createMenuItem };
@@ -514,7 +534,7 @@ export function useUpdateMenuItem() {
   const { mutate } = useSWRConfig();
   const updateMenuItem = async (cafeId: number, itemId: number, data: Partial<MenuItem>) => {
     const result = await apiRequest<MenuItem>(`/cafes/${cafeId}/menu/${itemId}`, { method: "PATCH", body: JSON.stringify(data) });
-    mutate(`/cafes/${cafeId}/menu`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/menu`), undefined, { revalidate: true });
     return result;
   };
   return { updateMenuItem };
@@ -527,7 +547,7 @@ export function useDeleteMenuItem() {
   const { mutate } = useSWRConfig();
   const deleteMenuItem = async (cafeId: number, itemId: number) => {
     await apiRequest(`/cafes/${cafeId}/menu/${itemId}`, { method: "DELETE" });
-    mutate(`/cafes/${cafeId}/menu`);
+    await mutate((key: string) => typeof key === "string" && key.startsWith(`/cafes/${cafeId}/menu`), undefined, { revalidate: true });
   };
   return { deleteMenuItem };
 }
@@ -570,9 +590,226 @@ export function useUpdateBalanceLimit() {
       method: "PATCH",
       body: JSON.stringify({ weekly_limit })
     });
-    mutate(`/users/${tgid}/balance`);
-    mutate("/users");
+    await mutate(`/users/${tgid}/balance`, undefined, { revalidate: true });
+    await mutate("/users", undefined, { revalidate: true });
     return result;
   };
   return { updateLimit };
+}
+
+// ========================================
+// User Access Request Hooks (Manager Only)
+// ========================================
+
+/**
+ * Hook to fetch user access requests (manager only)
+ * @param status - Optional status filter (pending, approved, rejected)
+ */
+export function useUserRequests(
+  status?: "pending" | "approved" | "rejected"
+): UseDataResult<import("./types").UserAccessRequest> {
+  const params = status ? `?status=${status}` : "";
+  const { data, error, isLoading, mutate } = useSWR<
+    import("./types").UserAccessRequestListResponse
+  >(`/user-requests${params}`, fetcher);
+  return {
+    data: data?.items,
+    error,
+    isLoading,
+    mutate
+  };
+}
+
+/**
+ * Hook to approve user access request (manager only)
+ */
+export function useApproveRequest(): {
+  approveRequest: (requestId: number) => Promise<void>;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { mutate } = useSWRConfig();
+
+  const approveRequest = async (requestId: number): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await apiRequest(`/user-requests/${requestId}/approve`, {
+        method: "POST",
+      });
+      // Revalidate user requests
+      await mutate((key: string) => typeof key === "string" && key.startsWith("/user-requests"), undefined, { revalidate: true });
+      setIsLoading(false);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error("Failed to approve request");
+      setError(error);
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
+  return {
+    approveRequest,
+    isLoading,
+    error,
+  };
+}
+
+/**
+ * Hook to reject user access request (manager only)
+ */
+export function useRejectRequest(): {
+  rejectRequest: (requestId: number) => Promise<void>;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { mutate } = useSWRConfig();
+
+  const rejectRequest = async (requestId: number): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await apiRequest(`/user-requests/${requestId}/reject`, {
+        method: "POST",
+      });
+      // Revalidate user requests
+      await mutate((key: string) => typeof key === "string" && key.startsWith("/user-requests"), undefined, { revalidate: true });
+      setIsLoading(false);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error("Failed to reject request");
+      setError(error);
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
+  return {
+    rejectRequest,
+    isLoading,
+    error,
+  };
+}
+
+/**
+ * Hook to update user (manager only)
+ */
+export function useUpdateUser() {
+  const { mutate } = useSWRConfig();
+  const updateUser = async (tgid: number, data: import("./types").UserUpdate) => {
+    const result = await apiRequest<User>(`/users/${tgid}`, {
+      method: "PATCH",
+      body: JSON.stringify(data)
+    });
+    await mutate("/users", undefined, { revalidate: true });
+    return result;
+  };
+  return { updateUser };
+}
+
+// ========================================
+// Deadline Schedule Hooks (Manager Only)
+// ========================================
+
+/**
+ * Hook to fetch deadline schedule for a cafe (manager only)
+ * @param cafeId - Cafe ID (null to skip fetching)
+ */
+export function useDeadlineSchedule(cafeId: number | null) {
+  const { data, error, isLoading, mutate } = useSWR<DeadlineScheduleResponse>(
+    cafeId ? `/cafes/${cafeId}/deadlines` : null,
+    fetcher
+  );
+  return { data, error, isLoading, mutate };
+}
+
+/**
+ * Hook to update deadline schedule (manager only)
+ */
+export function useUpdateDeadlineSchedule(): {
+  updateSchedule: (cafeId: number, schedule: DeadlineItem[]) => Promise<void>;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { mutate } = useSWRConfig();
+
+  const updateSchedule = async (cafeId: number, schedule: DeadlineItem[]): Promise<void> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await apiRequest(`/cafes/${cafeId}/deadlines`, {
+        method: "PUT",
+        body: JSON.stringify({ schedule }),
+      });
+      // Revalidate deadline schedule
+      await mutate(`/cafes/${cafeId}/deadlines`, undefined, { revalidate: true });
+      setIsLoading(false);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error("Failed to update schedule");
+      setError(error);
+      setIsLoading(false);
+      throw error;
+    }
+  };
+
+  return {
+    updateSchedule,
+    isLoading,
+    error,
+  };
+}
+
+// ========================================
+// User Recommendations Hooks
+// ========================================
+
+/**
+ * Hook to generate user recommendations (manager | self)
+ * Returns a function to trigger immediate AI recommendation generation
+ */
+export function useGenerateRecommendations(): {
+  generateRecommendations: (tgid: number) => Promise<RecommendationsResponse>;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const { mutate } = useSWRConfig();
+
+  const generateRecommendations = async (tgid: number): Promise<RecommendationsResponse> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await apiRequest<RecommendationsResponse>(
+        `/users/${tgid}/recommendations/generate`,
+        { method: "POST" }
+      );
+
+      // Update SWR cache to refresh UI
+      await mutate(`/users/${tgid}/recommendations`, undefined, { revalidate: true });
+
+      return result;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error("Failed to generate recommendations");
+      setError(error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return {
+    generateRecommendations,
+    isLoading,
+    error,
+  };
 }

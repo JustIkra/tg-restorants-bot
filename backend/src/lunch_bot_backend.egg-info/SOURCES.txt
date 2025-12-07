@@ -39,15 +39,18 @@ src/repositories/menu.py
 src/repositories/order.py
 src/repositories/summary.py
 src/repositories/user.py
+src/repositories/user_request.py
 src/routers/__init__.py
 src/routers/auth.py
 src/routers/cafe_links.py
 src/routers/cafes.py
 src/routers/deadlines.py
+src/routers/health.py
 src/routers/menu.py
 src/routers/orders.py
 src/routers/recommendations.py
 src/routers/summaries.py
+src/routers/user_requests.py
 src/routers/users.py
 src/schemas/__init__.py
 src/schemas/cafe.py
@@ -58,6 +61,7 @@ src/schemas/order.py
 src/schemas/recommendations.py
 src/schemas/summary.py
 src/schemas/user.py
+src/schemas/user_request.py
 src/services/__init__.py
 src/services/cafe.py
 src/services/cafe_link.py
@@ -67,6 +71,8 @@ src/services/order.py
 src/services/order_stats.py
 src/services/summary.py
 src/services/user.py
+src/services/user_request.py
 src/telegram/__init__.py
+src/telegram/__main__.py
 src/telegram/bot.py
 src/telegram/handlers.py

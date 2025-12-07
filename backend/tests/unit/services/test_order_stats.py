@@ -31,7 +31,7 @@ async def test_user_with_orders(db_session, test_user, test_cafe, test_menu_item
             order_date=(today - timedelta(days=i)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[
+            items=[
                 {"category": "soup", "menu_item_id": test_menu_items[0].id},
                 {"category": "main", "menu_item_id": test_menu_items[1].id},
                 {"category": "salad", "menu_item_id": test_menu_items[2].id},
@@ -140,7 +140,7 @@ async def test_get_active_users_filters_by_min_orders(
             order_date=(today - timedelta(days=i)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[],
+            items=[],
             extras=[],
             total_price=Decimal("10.00"),
         )
@@ -164,7 +164,7 @@ async def test_get_active_users_filters_by_min_orders(
             order_date=(today - timedelta(days=i)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[],
+            items=[],
             extras=[],
             total_price=Decimal("10.00"),
         )
@@ -196,7 +196,7 @@ async def test_get_user_stats_favorite_dishes(
             order_date=(today - timedelta(days=i)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[{"category": "soup", "menu_item_id": test_menu_items[0].id}],
+            items=[{"category": "soup", "menu_item_id": test_menu_items[0].id}],
             extras=[],
             total_price=Decimal("10.00"),
         )
@@ -209,7 +209,7 @@ async def test_get_user_stats_favorite_dishes(
             order_date=(today - timedelta(days=i + 5)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[{"category": "main", "menu_item_id": test_menu_items[1].id}],
+            items=[{"category": "main", "menu_item_id": test_menu_items[1].id}],
             extras=[],
             total_price=Decimal("10.00"),
         )
@@ -222,7 +222,7 @@ async def test_get_user_stats_favorite_dishes(
             order_date=(today - timedelta(days=i + 8)).date(),
             status="confirmed",
             combo_id=test_combo.id,
-            combo_items=[{"category": "salad", "menu_item_id": test_menu_items[2].id}],
+            items=[{"category": "salad", "menu_item_id": test_menu_items[2].id}],
             extras=[],
             total_price=Decimal("10.00"),
         )
